@@ -22,7 +22,7 @@ namespace utils {
 //     the sha256 output is taken as the zero octet for the NMK-HS
 //   - for the generation of NID, the NMK is fed into sha256, so having
 //     a const char* as input should be the proper byte ordering already
-void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_password, int password_len) {
+void generate_nmk_hs(std::uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_password, int password_len) {
     // do pbkdf1 (use sha256 as hashing function, iterate 1000 times,
     // use salt)
     std::vector<std::uint8_t> input(plain_password, plain_password + password_len);
@@ -36,7 +36,7 @@ void generate_nmk_hs(uint8_t nmk_hs[slac::defs::NMK_LEN], const char* plain_pass
     memcpy(nmk_hs, digest.data(), slac::defs::NMK_LEN);
 }
 
-void generate_nid_from_nmk(uint8_t nid[slac::defs::NID_LEN], const uint8_t nmk[slac::defs::NMK_LEN]) {
+void generate_nid_from_nmk(std::uint8_t nid[slac::defs::NID_LEN], const std::uint8_t nmk[slac::defs::NMK_LEN]) {
     // msb of least significant octet of NMK should be the leftmost bit
     // of the input, which corresponds to the usual const char* order
 
@@ -53,7 +53,7 @@ void generate_nid_from_nmk(uint8_t nid[slac::defs::NID_LEN], const uint8_t nmk[s
     memcpy(nid, digest.data(), slac::defs::NID_LEN - 1); // (bits 52 - 5)
     nid[slac::defs::NID_LEN - 1] =
         (slac::defs::NID_SECURITY_LEVEL_SIMPLE_CONNECT << slac::defs::NID_SECURITY_LEVEL_OFFSET) |
-        ((static_cast<uint8_t>(digest.data()[6])) >> slac::defs::NID_MOST_SIGNIFANT_BYTE_SHIFT);
+        ((static_cast<std::uint8_t>(digest.data()[6])) >> slac::defs::NID_MOST_SIGNIFANT_BYTE_SHIFT);
 }
 
 } // namespace utils
@@ -68,14 +68,14 @@ static constexpr auto effective_payload_length(const defs::MMV mmv) {
     }
 }
 
-void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtype, const defs::MMV mmv) {
+void HomeplugMessage::setup_payload(void const* payload, int len, std::uint16_t mmtype, const defs::MMV mmv) {
     if (len > effective_payload_length(mmv)) {
         throw std::runtime_error("Homeplug Payload length too long");
     }
     raw_msg.homeplug_header.mmv = static_cast<std::underlying_type_t<defs::MMV>>(mmv);
     raw_msg.homeplug_header.mmtype = htole16(mmtype);
 
-    uint8_t* dst = raw_msg.payload;
+    std::uint8_t* dst = raw_msg.payload;
 
     if (mmv != defs::MMV::AV_1_0) {
         homeplug_fragmentation_part fragmentation_part{};
@@ -89,10 +89,10 @@ void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtyp
     memcpy(dst, payload, len);
 
     // get pointer to the end of buffer
-    uint8_t* dst_end = dst + len;
+    std::uint8_t* dst_end = dst + len;
 
     // calculate raw message length
-    raw_msg_len = dst_end - reinterpret_cast<uint8_t*>(&raw_msg);
+    raw_msg_len = dst_end - reinterpret_cast<std::uint8_t*>(&raw_msg);
 
     // do padding
     auto padding_len = defs::MME_MIN_LENGTH - raw_msg_len;
@@ -102,8 +102,8 @@ void HomeplugMessage::setup_payload(void const* payload, int len, uint16_t mmtyp
     }
 }
 
-void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN],
-                                            const uint8_t src_mac_addr[ETH_ALEN]) {
+void HomeplugMessage::setup_ethernet_header(const std::uint8_t dst_mac_addr[ETH_ALEN],
+                                            const std::uint8_t src_mac_addr[ETH_ALEN]) {
 
     // ethernet frame byte order is big endian
     raw_msg.ethernet_header.ether_type = htons(defs::ETH_P_HOMEPLUG_GREENPHY);
@@ -119,11 +119,11 @@ void HomeplugMessage::setup_ethernet_header(const uint8_t dst_mac_addr[ETH_ALEN]
     }
 }
 
-uint16_t HomeplugMessage::get_mmtype() const {
+std::uint16_t HomeplugMessage::get_mmtype() const {
     return le16toh(raw_msg.homeplug_header.mmtype);
 }
 
-uint8_t* HomeplugMessage::get_src_mac() {
+std::uint8_t* HomeplugMessage::get_src_mac() {
     return raw_msg.ethernet_header.ether_shost;
 }
 
