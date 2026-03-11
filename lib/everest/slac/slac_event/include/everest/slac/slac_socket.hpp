@@ -7,15 +7,15 @@
 #include <cstdint>
 #include <everest/io/event/fd_event_client.hpp>
 #include <everest/io/event/unique_fd.hpp>
+#include <everest/slac/slac.hpp>
 #include <functional>
-#include <slac/slac.hpp>
 #include <string>
 
 namespace everest::lib::slac {
 
 class slac_socket {
 public:
-    using PayloadT = ::slac::messages::HomeplugMessage;
+    using PayloadT = messages::HomeplugMessage;
     using MacAddress = std::array<std::uint8_t, 6>;
 
     slac_socket() = default;
@@ -31,6 +31,7 @@ public:
     int get_error() const;
     bool is_open() const;
     MacAddress get_mac_address() const;
+
 private:
     io::event::unique_fd m_fd;
     MacAddress m_mac;

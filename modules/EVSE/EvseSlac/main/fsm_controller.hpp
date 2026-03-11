@@ -12,7 +12,9 @@
 #include <everest/io/event/fd_event_register_interface.hpp>
 #include <everest/io/event/timer_fd.hpp>
 
-class FSMController : public everest::lib::io::event::fd_event_register_interface {
+using namespace everest::lib;
+
+class FSMController : public io::event::fd_event_register_interface {
 public:
     explicit FSMController(slac::fsm::evse::Context& ctx);
 
@@ -24,12 +26,12 @@ public:
 
     void init();
 
-    bool register_events(everest::lib::io::event::fd_event_handler& handler) override;
-    bool unregister_events(everest::lib::io::event::fd_event_handler& handler) override;
+    bool register_events(io::event::fd_event_handler& handler) override;
+    bool unregister_events(io::event::fd_event_handler& handler) override;
 
 private:
-    using event_fd = everest::lib::io::event::event_fd;
-    using timer_fd = everest::lib::io::event::timer_fd;
+    using event_fd = io::event::event_fd;
+    using timer_fd = io::event::timer_fd;
 
     void handle_retrigger();
     void handle_reset();

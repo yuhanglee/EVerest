@@ -1,5 +1,5 @@
-#include "slac/slac.hpp"
 #include <everest/io/socket/socket.hpp>
+#include <everest/slac/slac.hpp>
 #include <everest/slac/slac_socket.hpp>
 
 #include <cstring>
@@ -23,7 +23,7 @@ std::string build_errno_string(std::string const& msg) {
 }
 
 event::unique_fd open_raw_socket(std::string const& if_name) {
-    const auto protocol = htons(slac::defs::ETH_P_HOMEPLUG_GREENPHY);
+    const auto protocol = htons(everest::lib::slac::defs::ETH_P_HOMEPLUG_GREENPHY);
     auto const socket_fd = ::socket(AF_PACKET, SOCK_RAW, protocol);
     if (socket_fd == -1) {
         auto msg = build_errno_string("Could not open raw socket");

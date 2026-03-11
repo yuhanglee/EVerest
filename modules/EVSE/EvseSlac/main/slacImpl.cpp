@@ -9,7 +9,6 @@
 
 #include <everest/slac/slac_event.hpp>
 #include <fmt/core.h>
-#include <slac/channel.hpp>
 #include <thread>
 
 #include "everest/io/event/fd_event_handler.hpp"

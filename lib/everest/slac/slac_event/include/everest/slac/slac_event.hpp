@@ -5,8 +5,8 @@
 #include <array>
 #include <everest/io/event/fd_event_handler.hpp>
 #include <everest/io/event/timer_fd.hpp>
+#include <everest/slac/slac.hpp>
 #include <everest/slac/slac_socket.hpp>
-#include <slac/slac.hpp>
 
 namespace everest::lib::slac {
 class SlacEvent : public everest::lib::io::event::fd_event_register_interface {
@@ -16,7 +16,7 @@ public:
     using MacAddress = slac_socket::MacAddress;
 
     SlacEvent(std::string const& if_name);
-    void send(::slac::messages::HomeplugMessage& msg);
+    void send(HomeplugMessage& msg);
 
     const uint8_t* get_mac_addr();
 
