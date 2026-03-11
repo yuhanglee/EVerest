@@ -8,44 +8,26 @@
 #include <condition_variable>
 #include <mutex>
 
-#include <everest/io/event/event_fd.hpp>
-#include <everest/io/event/fd_event_register_interface.hpp>
-#include <everest/io/event/timer_fd.hpp>
-
-using namespace everest::lib;
-
-class FSMController : public io::event::fd_event_register_interface {
+class FSMController {
 public:
     explicit FSMController(slac::fsm::evse::Context& ctx);
 
-    void signal_new_slac_message(slac::messages::HomeplugMessage const&);
+    void signal_new_slac_message(slac::messages::HomeplugMessage&);
     void signal_reset();
     bool signal_enter_bcd();
     bool signal_leave_bcd();
     void run();
 
-    void init();
-
-    bool register_events(io::event::fd_event_handler& handler) override;
-    bool unregister_events(io::event::fd_event_handler& handler) override;
-
 private:
-    using event_fd = io::event::event_fd;
-    using timer_fd = io::event::timer_fd;
-
-    void handle_retrigger();
-    void handle_reset();
-    void handle_enter_bcd();
-    void handle_leave_bcd();
-
+    bool signal_simple_event(slac::fsm::evse::Event ev);
     slac::fsm::evse::Context& ctx;
     slac::fsm::evse::FSM fsm;
 
-    event_fd m_reset;
-    event_fd m_enter_bcd;
-    event_fd m_leave_bcd;
-    event_fd m_feed;
-    timer_fd m_retrigger;
+    bool running{false};
+
+    std::mutex feed_mtx;
+    std::condition_variable new_event_cv;
+    bool new_event{false};
 };
 
 #endif // EVSE_SLAC_FSM_CONTROLLER_HPP

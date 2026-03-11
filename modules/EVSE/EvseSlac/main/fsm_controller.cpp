@@ -2,94 +2,78 @@
 // Copyright 2023 - 2023 Pionix GmbH and Contributors to EVerest
 #include "fsm_controller.hpp"
 
-#include <everest/io/event/fd_event_handler.hpp>
 #include <everest/slac/fsm/evse/states/others.hpp>
-#include <everest/util/misc/bind.hpp>
 
-FSMController::FSMController(slac::fsm::evse::Context& context) : ctx(context) {
-};
+FSMController::FSMController(slac::fsm::evse::Context& context) : ctx(context){};
 
-void FSMController::init() {
-    ctx.log_info("Starting the SLAC state machine");
-    fsm.reset<slac::fsm::evse::InitState>(ctx);
-    run();
-}
+void FSMController::signal_new_slac_message(slac::messages::HomeplugMessage& msg) {
+    if (running == false) {
+        return;
+    }
+    {
+        const std::lock_guard<std::mutex> feed_lck(feed_mtx);
+        ctx.slac_message_payload = msg;
+        fsm.handle_event(slac::fsm::evse::Event::SLAC_MESSAGE);
+    }
 
-void FSMController::signal_new_slac_message(slac::messages::HomeplugMessage const& msg) {
-    ctx.slac_message_payload = msg;
-    fsm.handle_event(slac::fsm::evse::Event::SLAC_MESSAGE);
-    run();
+    new_event = true;
+    new_event_cv.notify_all();
 }
 
 void FSMController::signal_reset() {
-    m_reset.notify();
+    signal_simple_event(slac::fsm::evse::Event::RESET);
 }
 
 bool FSMController::signal_enter_bcd() {
-    m_enter_bcd.notify();
-    return true;
+    return signal_simple_event(slac::fsm::evse::Event::ENTER_BCD);
 }
 
 bool FSMController::signal_leave_bcd() {
-    m_leave_bcd.notify();
-    return true;
+    return signal_simple_event(slac::fsm::evse::Event::LEAVE_BCD);
 }
 
-void FSMController::handle_retrigger() {
-    run();
-    m_retrigger.set_timeout_ms(0);
-}
+bool FSMController::signal_simple_event(slac::fsm::evse::Event ev) {
+    const std::lock_guard<std::mutex> feed_lck(feed_mtx);
+    auto event_result = fsm.handle_event(ev);
 
-void FSMController::handle_reset() {
-    fsm.handle_event(slac::fsm::evse::Event::RESET);
-    run();
-}
+    new_event = true;
+    new_event_cv.notify_all();
 
-void FSMController::handle_enter_bcd() {
-    fsm.handle_event(slac::fsm::evse::Event::ENTER_BCD);
-    run();
-}
-
-void FSMController::handle_leave_bcd() {
-    fsm.handle_event(slac::fsm::evse::Event::LEAVE_BCD);
-    run();
-}
-
-bool FSMController::register_events(everest::lib::io::event::fd_event_handler& handler) {
-    using everest::lib::util::bind_obj;
-    using T = FSMController;
-    auto result = true;
-    result &= handler.register_event_handler(&m_reset, bind_obj(&T::handle_reset, this));
-    result &= handler.register_event_handler(&m_enter_bcd, bind_obj(&T::handle_enter_bcd, this));
-    result &= handler.register_event_handler(&m_leave_bcd, bind_obj(&T::handle_leave_bcd, this));
-    result &= handler.register_event_handler(&m_feed, bind_obj(&T::run, this));
-    result &= handler.register_event_handler(&m_retrigger, bind_obj(&T::handle_retrigger, this));
-    return result;
-}
-
-bool FSMController::unregister_events(everest::lib::io::event::fd_event_handler& handler) {
-    auto result = true;
-    result &= handler.unregister_event_handler(&m_reset);
-    result &= handler.unregister_event_handler(&m_enter_bcd);
-    result &= handler.unregister_event_handler(&m_leave_bcd);
-    result &= handler.unregister_event_handler(&m_feed);
-    result &= handler.unregister_event_handler(&m_retrigger);
-    return result;
+    return event_result == fsm::HandleEventResult::SUCCESS;
 }
 
 void FSMController::run() {
-    using namespace std::chrono_literals;
-    auto feed_result = fsm.feed();
-    if (feed_result.transition()) {
-        m_feed.notify();
-    } else if (feed_result.internal_error() || feed_result.unhandled_event()) {
-        return;
-    } else if (feed_result.has_value() == true) {
-        const auto timeout = *feed_result;
-        if (timeout == 0) {
-            m_feed.notify();
-            return;
+    ctx.log_info("Starting the SLAC state machine");
+
+    fsm.reset<slac::fsm::evse::InitState>(ctx);
+
+    std::unique_lock<std::mutex> feed_lck(feed_mtx);
+
+    running = true;
+
+    while (true) {
+        auto feed_result = fsm.feed();
+
+        if (feed_result.transition()) {
+            // call immediately again
+            continue;
+        } else if (feed_result.internal_error() || feed_result.unhandled_event()) {
+            // FIXME (aw): would need to log here!
+        } else if (feed_result.has_value() == true) {
+            const auto timeout = *feed_result;
+            if (timeout == 0) {
+                // call feed directly again
+                continue;
+            }
+            new_event_cv.wait_for(feed_lck, std::chrono::milliseconds(timeout), [this] { return new_event; });
+        } else {
+            // nothing happened, no return value -> wait for new event
+            new_event_cv.wait(feed_lck, [this] { return new_event; });
         }
-        m_retrigger.set_timeout_ms(timeout);
+
+        if (new_event) {
+            // we got a new event, reset it and let run feed again
+            new_event = false;
+        }
     }
 }

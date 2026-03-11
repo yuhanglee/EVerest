@@ -3,14 +3,16 @@
 
 #include "slacImpl.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <future>
 
-#include <everest/slac/io.hpp>
+#include <everest/slac/slac_event.hpp>
 #include <fmt/core.h>
-#include <slac/channel.hpp>
 #include <thread>
 
+#include "everest/io/event/fd_event_handler.hpp"
+#include "everest/logging.hpp"
 #include "fsm_controller.hpp"
 
 static std::promise<void> module_ready;
@@ -25,6 +27,11 @@ static std::string mac_to_ascii(const std::string& mac_binary) {
         return "";
     return fmt::format("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}", mac_binary[0], mac_binary[1], mac_binary[2],
                        mac_binary[3], mac_binary[4], mac_binary[5]);
+}
+
+slacImpl::~slacImpl() {
+    online.store(false);
+    exit_event.notify();
 }
 
 void slacImpl::init() {
@@ -48,16 +55,7 @@ void slacImpl::run() {
     }
 
     // initialize slac i/o
-    SlacIO slac_io;
-    try {
-        slac_io.init(config.device);
-    } catch (const std::exception& e) {
-        EVLOG_error << fmt::format("Couldn't open device {} for SLAC communication. Reason: {}", config.device,
-                                   e.what());
-        raise_error(
-            error_factory->create_error("generic/CommunicationFault", "", "Could not open device " + config.device));
-        return;
-    }
+    everest::lib::slac::SlacEvent slac_io(config.device);
 
     // setup callbacks
     slac::fsm::evse::ContextCallbacks callbacks;
@@ -75,10 +73,22 @@ void slacImpl::run() {
 
     callbacks.signal_error_routine_request = [this]() { publish_request_error_routine(nullptr); };
 
-    callbacks.log_debug = [](const std::string& text) { EVLOG_debug << text; };
-    callbacks.log_info = [](const std::string& text) { EVLOG_info << text; };
-    callbacks.log_warn = [](const std::string& text) { EVLOG_warning << text; };
-    callbacks.log_error = [](const std::string& text) { EVLOG_error << text; };
+    callbacks.log_debug = [](const std::string& text) {
+        EVLOG_debug << text << std::endl;
+        ;
+    };
+    callbacks.log_info = [](const std::string& text) {
+        EVLOG_info << text << std::endl;
+        ;
+    };
+    callbacks.log_warn = [](const std::string& text) {
+        EVLOG_warning << text << std::endl;
+        ;
+    };
+    callbacks.log_error = [](const std::string& text) {
+        EVLOG_error << text << std::endl;
+        ;
+    };
 
     if (config.publish_mac_on_first_parm_req) {
         callbacks.signal_ev_mac_address_parm_req = [this](const std::string& mac) { publish_ev_mac_address(mac); };
@@ -111,9 +121,22 @@ void slacImpl::run() {
 
     fsm_ctrl = std::make_unique<FSMController>(fsm_ctx);
 
-    slac_io.run([](slac::messages::HomeplugMessage& msg) { fsm_ctrl->signal_new_slac_message(msg); });
-
-    fsm_ctrl->run();
+    slac_io.set_callback([](slac::messages::HomeplugMessage const& msg) { fsm_ctrl->signal_new_slac_message(msg); });
+    slac_io.set_error_callback([](auto on_error) {
+        if(on_error) {
+            EVLOG_error << "SLAC on error. Waiting for hardware recovery" << std::endl;
+        }
+        else {
+            EVLOG_error << "SLAC error cleared. Reset in progress" << std::endl;
+            fsm_ctrl->init();
+        }
+    });
+    everest::lib::io::event::fd_event_handler event_handler;
+    event_handler.register_event_handler(&slac_io);
+    event_handler.register_event_handler(fsm_ctrl.get());
+    event_handler.register_event_handler(&exit_event, [](auto&) {});
+    fsm_ctrl->init();
+    event_handler.run(online);
 }
 
 void slacImpl::handle_reset(bool& enable) {
