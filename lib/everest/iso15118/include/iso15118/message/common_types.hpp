@@ -8,6 +8,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <everest/util/vector/fixed_vector.hpp>
 
 namespace iso15118::message_20 {
 
@@ -322,7 +323,7 @@ struct Receipt {
     std::optional<DetailedCost> occupancy_costs;
     std::optional<DetailedCost> additional_service_costs;
     std::optional<DetailedCost> overstay_costs;
-    std::vector<DetailedTax> tax_costs; // 0 to 10 elements! // FIXME(sl): optional?
+    everest::lib::util::fixed_vector<DetailedTax, 10> tax_costs; // 0 to 10 elements!
 };
 
 struct X509IssuerSerial {
@@ -331,7 +332,7 @@ struct X509IssuerSerial {
 };
 
 struct ListOfRootCertificateIDs {
-    std::vector<X509IssuerSerial> root_certificate_id;
+    everest::lib::util::fixed_vector<X509IssuerSerial, 3> root_certificate_id; // Max: 3
 };
 
 // TODO(sl): Adding content to following structs

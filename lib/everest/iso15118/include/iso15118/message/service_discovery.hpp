@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "common_types.hpp"
+#include <everest/util/vector/fixed_vector.hpp>
 
 namespace iso15118::message_20 {
 
@@ -16,13 +17,13 @@ struct Service {
     ServiceCategory service_id;
     bool free_service;
 };
-using ServiceList = std::vector<Service>; // max: 8
+using ServiceList = everest::lib::util::fixed_vector<Service, 8>; // max: 8
 
 struct VasService {
     uint16_t service_id;
     bool free_service;
 };
-using VasServiceList = std::vector<VasService>;
+using VasServiceList = everest::lib::util::fixed_vector<VasService, 16>; // Max: 16
 
 } // namespace datatypes
 
