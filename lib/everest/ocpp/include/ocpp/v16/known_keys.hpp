@@ -9,6 +9,7 @@
 #include "ocpp/v2/ocpp_types.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string_view>
 #include <tuple>
@@ -38,16 +39,12 @@ namespace ocpp::v16::keys {
     mapping(LocalPreAuthorize, LocalPreAuthorize, Actual) \
     mapping(MaxEnergyOnInvalidId, MaxEnergyOnInvalidId, Actual) \
     mapping(MeterValuesAlignedData, AlignedDataMeasurands, Actual) \
-    mapping(MeterValuesAlignedDataMaxLength, AlignedDataMeasurands, MaxSet) \
     mapping(MeterValuesSampledData, SampledDataTxUpdatedMeasurands, Actual) \
-    mapping(MeterValuesSampledDataMaxLength, SampledDataTxUpdatedMeasurands, MaxSet) \
     mapping(MeterValueSampleInterval, SampledDataTxUpdatedInterval, Actual) \
     mapping(ResetRetries, ResetRetries, Actual) \
     mapping(StopTransactionOnInvalidId, StopTxOnInvalidId, Actual) \
     mapping(StopTxnAlignedData, AlignedDataTxEndedMeasurands, Actual) \
-    mapping(StopTxnAlignedDataMaxLength, AlignedDataTxEndedMeasurands, MaxSet) \
     mapping(StopTxnSampledData, SampledDataTxEndedMeasurands, Actual) \
-    mapping(StopTxnSampledDataMaxLength, SampledDataTxEndedMeasurands, MaxSet) \
     mapping(TransactionMessageAttempts, MessageAttempts, Actual) \
     mapping(TransactionMessageRetryInterval, MessageAttemptInterval, Actual) \
     mapping(WebSocketPingInterval, WebSocketPingInterval, Actual) \
@@ -114,19 +111,19 @@ namespace ocpp::v16::keys {
     mapping(RetryBackoffWaitMinimum, RetryBackOffWaitMinimum, Actual)
 
 // ============================================================================
-// LocalAuthList Section
+// VariableCharacteristics.maxLimit mappings
+// These OCPP 1.6 read-only length/limit keys map to VariableCharacteristics.maxLimit
+// in OCPP 2.x
 // ============================================================================
 
-#define MAPPING_LOCAL_AUTH_LIST(mapping) \
-    mapping(LocalAuthListMaxLength, LocalAuthListCtrlrEntries, MaxSet) \
-    mapping(SendLocalListMaxLength, ItemsPerMessageSendLocalList, MaxSet)
-
-// ============================================================================
-// Smart Charging Section
-// ============================================================================
-
-#define MAPPING_SMART_CHARGING(mapping) \
-    mapping(MaxChargingProfilesInstalled, EntriesChargingProfiles, MaxSet)
+#define MAPPING_MAX_LIMIT(mapping) \
+    mapping(MeterValuesAlignedDataMaxLength, AlignedDataMeasurands) \
+    mapping(MeterValuesSampledDataMaxLength, SampledDataTxUpdatedMeasurands) \
+    mapping(StopTxnAlignedDataMaxLength, AlignedDataTxEndedMeasurands) \
+    mapping(StopTxnSampledDataMaxLength, SampledDataTxEndedMeasurands) \
+    mapping(LocalAuthListMaxLength, LocalAuthListCtrlrEntries) \
+    mapping(SendLocalListMaxLength, ItemsPerMessageSendLocalList) \
+    mapping(MaxChargingProfilesInstalled, EntriesChargingProfiles)
 
 // ============================================================================
 // Security Section
@@ -205,8 +202,6 @@ namespace ocpp::v16::keys {
     MAPPING_MISC(mapping) \
     MAPPING_STANDARD(mapping) \
     MAPPING_INTERNAL(mapping) \
-    MAPPING_LOCAL_AUTH_LIST(mapping) \
-    MAPPING_SMART_CHARGING(mapping) \
     MAPPING_SECURITY(mapping) \
     MAPPING_PNC(mapping) \
     MAPPING_COST(mapping)
@@ -383,6 +378,14 @@ DeviceModel_CV convert_v2(const std::string_view& str);
 DeviceModel_CV convert_v2(valid_keys key);
 std::optional<std::string> convert_v2(const ocpp::v2::Component& component, const ocpp::v2::Variable& variable,
                                       ocpp::v2::AttributeEnum attribute);
+
+/// Returns the (Component, Variable) pair for keys that map to VariableCharacteristics.maxLimit,
+/// or std::nullopt if the key uses a regular VariableAttribute mapping.
+using DeviceModel_MaxLimitCV = std::optional<std::pair<ocpp::v2::Component, ocpp::v2::Variable>>;
+DeviceModel_MaxLimitCV convert_v2_max_limit(valid_keys key);
+
+/// Calls \p fn(key) for every key in MAPPING_MAX_LIMIT, in declaration order.
+void for_each_max_limit_key(const std::function<void(valid_keys)>& fn);
 
 } // namespace ocpp::v16::keys
 

@@ -14,7 +14,7 @@ The implementation in code (for example `known_keys` conversion logic and patchi
 | 2 | `AuthorizationCacheEnabled` | VariableAttribute | `AuthCacheCtrlr` | `Enabled` | `Actual` |
 | 3 | `AuthorizeRemoteTxRequests` | VariableAttribute | `AuthCtrlr` | `AuthorizeRemoteStart` | `Actual` |
 | 5 | `ClockAlignedDataInterval` | VariableAttribute | `AlignedDataCtrlr` | `Interval` | `Actual` |
-| 6 | `ConnectionTimeOut` | VariableAttribute | `TxCtrlr` | `EVConnectionTimeout` | `Actual` |
+| 6 | `ConnectionTimeOut` | VariableAttribute | `TxCtrlr` | `EVConnectionTimeOut` | `Actual` |
 | 7 | `HeartbeatInterval` | VariableAttribute | `OCPPCommCtrlr` | `HeartbeatInterval` | `Actual` |
 | 8 | `LocalAuthorizeOffline` | VariableAttribute | `AuthCtrlr` | `LocalAuthorizeOffline` | `Actual` |
 | 9 | `LocalPreAuthorize` | VariableAttribute | `AuthCtrlr` | `LocalPreAuthorize` | `Actual` |
