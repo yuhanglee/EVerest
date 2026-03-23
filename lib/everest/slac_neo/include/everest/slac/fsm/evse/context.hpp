@@ -8,8 +8,8 @@
 #include <functional>
 #include <string>
 
-#include <everest/slac/slac.hpp>
 #include <everest/slac/EvseSlacConfig.hpp>
+#include <everest/slac/slac.hpp>
 
 namespace everest::lib::slac::fsm::evse {
 
@@ -132,7 +132,6 @@ template <> struct MMV<messages::lumissil::nscm_get_d_link_status_cnf> {
 
 } // namespace _context_detail
 
-
 struct ContextCallbacks {
     std::function<void(messages::HomeplugMessage&)> send_raw_slac{nullptr};
     std::function<void(const std::string&)> signal_state{nullptr};
@@ -145,7 +144,6 @@ struct ContextCallbacks {
     std::function<void(const std::string&)> log_warn{nullptr};
     std::function<void(const std::string&)> log_error{nullptr};
 };
-
 
 struct Context {
     explicit Context(const ContextCallbacks& callbacks_) : callbacks(callbacks_){};
@@ -162,7 +160,7 @@ struct Context {
         messages::HomeplugMessage::MacAddress dst;
         std::memcpy(dst.data(), mac, dst.size());
         hp_message.set_destination(dst);
-//        hp_message.setup_ethernet_header(mac);
+        //        hp_message.setup_ethernet_header(mac);
         hp_message.setup_payload(&message, sizeof(message), _context_detail::MMTYPE<SlacMessageType>::value,
                                  _context_detail::MMV<SlacMessageType>::value);
         callbacks.send_raw_slac(hp_message);
@@ -184,6 +182,7 @@ struct Context {
     defs::ModemVendor modem_vendor{defs::ModemVendor::Unknown};
     uint8_t evse_mac[ETH_ALEN];
     messages::cm_slac_match_cnf match_confirm_message;
+
 private:
     const ContextCallbacks& callbacks;
 };

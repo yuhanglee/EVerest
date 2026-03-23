@@ -6,8 +6,7 @@
 #include <everest/slac/fsm/evse/states/others.hpp>
 #include <everest/util/misc/bind.hpp>
 
-FSMController::FSMController(slac::fsm::evse::Context& context) : ctx(context) {
-};
+FSMController::FSMController(slac::fsm::evse::Context& context) : ctx(context){};
 
 void FSMController::init() {
     ctx.log_info("Starting the SLAC state machine");

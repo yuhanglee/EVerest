@@ -123,10 +123,9 @@ void slacImpl::run() {
 
     slac_io.set_callback([](slac::messages::HomeplugMessage const& msg) { fsm_ctrl->signal_new_slac_message(msg); });
     slac_io.set_error_callback([](auto on_error) {
-        if(on_error) {
+        if (on_error) {
             EVLOG_error << "SLAC on error. Waiting for hardware recovery" << std::endl;
-        }
-        else {
+        } else {
             EVLOG_error << "SLAC error cleared. Reset in progress" << std::endl;
             fsm_ctrl->init();
         }

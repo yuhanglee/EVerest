@@ -51,4 +51,4 @@ struct EvseSlacConfig {
     bool reset_instead_of_fail{false};
 };
 
-}
+} // namespace everest::lib::slac::fsm::evse

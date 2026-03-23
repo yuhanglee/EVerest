@@ -16,6 +16,6 @@ enum class LogLevel {
 
 void session_log(Context& ctx, MatchingSession& session, const LogLevel level, const std::string& text);
 
-} // namespace slac::fsm::evse
+} // namespace everest::lib::slac::fsm::evse
 
 #endif // EVSE_SLAC_STATES_MATCHING_HANDLE_SLAC_HPP

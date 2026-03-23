@@ -248,5 +248,4 @@ typedef struct {
 
 } // namespace lumissil
 
-
 } // namespace everest::lib::slac::messages

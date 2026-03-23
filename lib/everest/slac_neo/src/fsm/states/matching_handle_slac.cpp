@@ -48,8 +48,6 @@ static MatchingSession* find_session(std::vector<MatchingSession>& sessions, con
     return nullptr;
 }
 
-
-
 void MatchingState::handle_slac_message(slac::messages::HomeplugMessage& msg) {
     const auto mmtype = msg.get_mmtype();
     tmp_ev_mac = msg.get_src_mac();
@@ -308,7 +306,8 @@ void MatchingState::finalize_sounding(MatchingSession& session) {
     if (ctx.slac_config.sounding_atten_adjustment != 0) {
         ss << " plus offset " << std::to_string(ctx.slac_config.sounding_atten_adjustment) << " dB";
     }
-    ss << ", from " << std::to_string(slac::defs::AAG_LIST_LEN) << " groups, " << session.session_data.captured_sounds << " sounds";
+    ss << ", from " << std::to_string(slac::defs::AAG_LIST_LEN) << " groups, " << session.session_data.captured_sounds
+       << " sounds";
     session_log(ctx, session, LogLevel::INFO, ss.str());
 }
 

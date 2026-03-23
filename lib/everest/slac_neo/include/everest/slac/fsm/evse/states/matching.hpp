@@ -6,8 +6,8 @@
 #include <chrono>
 #include <memory>
 
-#include <everest/slac/slac.hpp>
 #include <everest/slac/MatchingSessionData.hpp>
+#include <everest/slac/slac.hpp>
 
 #include "../fsm.hpp"
 
@@ -79,6 +79,6 @@ struct MatchingState : public FSMSimpleState {
     int failed_count{0};
 };
 
-} // namespace everst::lib::slac::fsm::evse
+} // namespace everest::lib::slac::fsm::evse
 
 #endif // EVSE_SLAC_STATES_MATCHING_HPP

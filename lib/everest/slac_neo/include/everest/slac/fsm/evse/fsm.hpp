@@ -28,6 +28,6 @@ using FSM = ::fsm::FSM<Event, FSMReturnType>;
 using FSMSimpleState = ::fsm::states::StateWithContext<FSM::SimpleStateType, Context>;
 using FSMCompoundState = ::fsm::states::StateWithContext<FSM::CompoundStateType, Context>;
 
-} // namespace slac::fsm::evse
+} // namespace everest::lib::slac::fsm::evse
 
 #endif // EVSE_SLAC_FSM_HPP

@@ -44,7 +44,7 @@ struct Conf {
 class slacImpl : public slacImplBase {
 public:
     slacImpl() = delete;
-    slacImpl(Everest::ModuleAdapter* ev, const Everest::PtrContainer<EvseSlacNeo >& mod, Conf& config) :
+    slacImpl(Everest::ModuleAdapter* ev, const Everest::PtrContainer<EvseSlacNeo>& mod, Conf& config) :
         slacImplBase(ev, "main"), mod(mod), config(config){};
     // ev@8ea32d28-373f-4c90-ae5e-b4fcc74e2a61:v1
     // insert your public definitions here
@@ -65,7 +65,7 @@ protected:
     // ev@d2d1847a-7b88-41dd-ad07-92785f06f5c4:v1
 
 private:
-    const Everest::PtrContainer<EvseSlacNeo >& mod;
+    const Everest::PtrContainer<EvseSlacNeo>& mod;
     const Conf& config;
 
     virtual void init() override;

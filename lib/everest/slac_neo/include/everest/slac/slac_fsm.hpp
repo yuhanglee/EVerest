@@ -17,6 +17,7 @@ public:
     void update();
 
     void restart_fsm();
+
 private:
     void* fsm;
 };

@@ -6,13 +6,12 @@
 #include <optional>
 #include <string_view>
 
-#include <everest/slac/fsm/evse/states/matching.hpp>
 #include <everest/slac/MatchingSessionData.hpp>
+#include <everest/slac/fsm/evse/states/matching.hpp>
 
 #include "../misc.hpp"
 
 namespace everest::lib::slac::fsm::evse {
-
 
 void ResetState::enter() {
     ctx.log_info("Entered Reset state");
@@ -149,7 +148,7 @@ FSMSimpleState::HandleEventReturnType IdleState::handle_event(AllocatorType& sa,
     }
 }
 
-    static std::optional<bool> check_link_status_cnf(const defs::ModemVendor modem_vendor,
+static std::optional<bool> check_link_status_cnf(const defs::ModemVendor modem_vendor,
                                                  messages::HomeplugMessage& message) {
     const auto mmtype = message.get_mmtype();
     if (modem_vendor == defs::ModemVendor::Qualcomm &&

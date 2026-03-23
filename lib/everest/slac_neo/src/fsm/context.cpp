@@ -8,7 +8,6 @@
 
 namespace everest::lib::slac::fsm::evse {
 
-
 void Context::signal_cm_slac_parm_req(const uint8_t* mac) {
     if (callbacks.signal_ev_mac_address_parm_req) {
         const auto mac_string = format_mac_addr(mac);
@@ -65,4 +64,4 @@ void Context::log_error(const std::string& text) {
     }
 }
 
-} // namespace slac::fsm::evse
+} // namespace everest::lib::slac::fsm::evse

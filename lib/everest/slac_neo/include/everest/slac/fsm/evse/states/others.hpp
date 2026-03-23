@@ -107,6 +107,6 @@ struct InitState : public FSMSimpleState {
     } sub_state{SubState::QUALCOMM_OP_ATTR};
 };
 
-} // namespace slac::fsm::evse
+} // namespace everest::lib::slac::fsm::evse
 
 #endif // EVSE_SLAC_STATES_OTHERS_HPP

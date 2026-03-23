@@ -56,8 +56,7 @@ void slac_fsm::restart_fsm() {
 }
 
 struct state_logger {
-    template <typename T>
-    void operator()(T const& s) const {
+    template <typename T> void operator()(T const& s) const {
         std::cout << " -> Active: " << boost::core::demangle(typeid(s).name()) << std::endl;
     }
 };

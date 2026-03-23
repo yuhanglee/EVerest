@@ -36,7 +36,7 @@ bool FSMController::signal_leave_bcd() {
 }
 
 void FSMController::handle_retrigger() {
-//    ctx.log_info("Signal update");
+    //    ctx.log_info("Signal update");
     fsm.update();
 }
 

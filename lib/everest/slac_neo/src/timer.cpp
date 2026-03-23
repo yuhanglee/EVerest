@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2022 - 2026 Pionix GmbH and Contributors to EVerest
 
-#include <everest/slac/timer.hpp>
 #include <chrono>
+#include <everest/slac/timer.hpp>
 #include <thread>
 
 namespace everest::lib::slac {
