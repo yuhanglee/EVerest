@@ -295,21 +295,80 @@ void DERControl::handle_set_der_control(ocpp::Call<SetDERControlRequest> call) {
 
 void DERControl::handle_get_der_control(ocpp::Call<GetDERControlRequest> call) {
     const auto& request = call.msg;
-
     GetDERControlResponse response;
-    // TODO: Implement R04.FR.30-37 in Task 5
-    response.status = DERControlStatusEnum::NotFound;
 
+    // R04.FR.36: If controlType specified and not supported → NotSupported
+    if (request.controlType.has_value() && !this->is_control_type_supported(request.controlType.value())) {
+        response.status = DERControlStatusEnum::NotSupported;
+        ocpp::CallResult<GetDERControlResponse> call_result(response, call.uniqueId);
+        this->context.message_dispatcher.dispatch_call_result(call_result);
+        return;
+    }
+
+    // Build filter criteria from request
+    std::optional<std::string> control_type_filter;
+    if (request.controlType.has_value()) {
+        control_type_filter = der_control_enum_to_string(request.controlType.value());
+    }
+    std::optional<std::string> control_id_filter;
+    if (request.controlId.has_value()) {
+        control_id_filter = request.controlId->get();
+    }
+
+    auto matching = this->context.database_handler.get_der_controls_matching_criteria(
+        request.isDefault, control_type_filter, control_id_filter);
+
+    // R04.FR.30: No matching controls → NotFound
+    if (matching.empty()) {
+        response.status = DERControlStatusEnum::NotFound;
+        ocpp::CallResult<GetDERControlResponse> call_result(response, call.uniqueId);
+        this->context.message_dispatcher.dispatch_call_result(call_result);
+        return;
+    }
+
+    // R04.FR.33-35, R04.FR.37: Return Accepted and send ReportDERControl
+    response.status = DERControlStatusEnum::Accepted;
     ocpp::CallResult<GetDERControlResponse> call_result(response, call.uniqueId);
     this->context.message_dispatcher.dispatch_call_result(call_result);
+
+    // Send report with matching controls
+    this->send_report(request.requestId, matching);
 }
 
 void DERControl::handle_clear_der_control(ocpp::Call<ClearDERControlRequest> call) {
     const auto& request = call.msg;
-
     ClearDERControlResponse response;
-    // TODO: Implement R04.FR.40-46 in Task 5
-    response.status = DERControlStatusEnum::NotFound;
+
+    // R04.FR.46: If controlId is specified, clear that specific control
+    if (request.controlId.has_value()) {
+        bool deleted = this->context.database_handler.delete_der_control(request.controlId->get());
+        // R04.FR.42: Not found
+        response.status = deleted ? DERControlStatusEnum::Accepted : DERControlStatusEnum::NotFound;
+        ocpp::CallResult<ClearDERControlResponse> call_result(response, call.uniqueId);
+        this->context.message_dispatcher.dispatch_call_result(call_result);
+        return;
+    }
+
+    // R04.FR.43: If controlType specified and not supported (no controlId) → NotSupported
+    if (request.controlType.has_value() && !this->is_control_type_supported(request.controlType.value())) {
+        response.status = DERControlStatusEnum::NotSupported;
+        ocpp::CallResult<ClearDERControlResponse> call_result(response, call.uniqueId);
+        this->context.message_dispatcher.dispatch_call_result(call_result);
+        return;
+    }
+
+    // R04.FR.44: No controlType, no controlId → clear all matching isDefault
+    // R04.FR.45: controlType set, no controlId → clear by type and isDefault
+    std::optional<std::string> control_type_filter;
+    if (request.controlType.has_value()) {
+        control_type_filter = der_control_enum_to_string(request.controlType.value());
+    }
+
+    int deleted_count =
+        this->context.database_handler.delete_der_controls_matching_criteria(request.isDefault, control_type_filter);
+
+    // R04.FR.41: Nothing found to delete
+    response.status = (deleted_count > 0) ? DERControlStatusEnum::Accepted : DERControlStatusEnum::NotFound;
 
     ocpp::CallResult<ClearDERControlResponse> call_result(response, call.uniqueId);
     this->context.message_dispatcher.dispatch_call_result(call_result);
@@ -321,8 +380,18 @@ void DERControl::send_notify_start_stop(const CiString<36>& /*control_id*/, bool
     // TODO: Implement in Task 6
 }
 
-void DERControl::send_report(int32_t /*request_id*/, const std::vector<std::string>& /*control_jsons*/) {
-    // TODO: Implement in Task 5
+void DERControl::send_report(int32_t request_id, const std::vector<std::string>& control_jsons) {
+    // Build a ReportDERControlRequest from the stored control JSONs
+    // R04.FR.31: Set requestId from GetDERControl request
+    ReportDERControlRequest report;
+    report.requestId = request_id;
+
+    // For now, send a single report message (R04.FR.32: tbc=false for last/only message)
+    // TODO: Handle multi-message reports for large result sets
+
+    // Dispatch the report as a CALL (CS→CSMS)
+    ocpp::Call<ReportDERControlRequest> report_call(report);
+    this->context.message_dispatcher.dispatch_call(report_call, false);
 }
 
 } // namespace ocpp::v21

@@ -362,3 +362,224 @@ TEST_F(DERControlTest, SetDERControl_PersistsToDatabase) {
 
     der_control.handle_message(msg);
 }
+
+// =============================================================================
+// GetDERControl tests (R04.FR.30-37)
+// =============================================================================
+
+// R04.FR.30 - No matching controls → NotFound
+TEST_F(DERControlTest, GetDERControl_NoControls_NotFound) {
+    DERControl der_control(functional_block_context);
+
+    GetDERControlRequest req;
+    req.requestId = 1;
+    req.controlType = DERControlEnum::FreqDroop;
+
+    auto msg = make_get_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock, get_der_controls_matching_criteria(_, _, _))
+        .WillOnce(Return(std::vector<std::string>{}));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<GetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::NotFound);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.36 - Unsupported controlType → NotSupported
+TEST_F(DERControlTest, GetDERControl_UnsupportedType_NotSupported) {
+    DERControl der_control(functional_block_context);
+
+    GetDERControlRequest req;
+    req.requestId = 2;
+    req.controlType = DERControlEnum::HFMustTrip; // Not in ModesSupported
+
+    auto msg = make_get_der_control_msg(req);
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<GetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::NotSupported);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.33 - No filters → returns all, sends ReportDERControl
+TEST_F(DERControlTest, GetDERControl_NoFilters_ReturnsAll) {
+    DERControl der_control(functional_block_context);
+
+    GetDERControlRequest req;
+    req.requestId = 3;
+
+    auto msg = make_get_der_control_msg(req);
+
+    std::string control_json = R"({"controlId":"ctrl-1","controlType":"FreqDroop","isDefault":true,"priority":0,"request":{}})";
+    EXPECT_CALL(database_handler_mock, get_der_controls_matching_criteria(_, _, _))
+        .WillOnce(Return(std::vector<std::string>{control_json}));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<GetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    // Expect ReportDERControl to be dispatched
+    EXPECT_CALL(mock_dispatcher, dispatch_call(_, _)).Times(1);
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.34 - Filter by controlType
+TEST_F(DERControlTest, GetDERControl_ByType_ReportsMatching) {
+    DERControl der_control(functional_block_context);
+
+    GetDERControlRequest req;
+    req.requestId = 4;
+    req.controlType = DERControlEnum::FreqDroop;
+
+    auto msg = make_get_der_control_msg(req);
+
+    std::string control_json = R"({"controlId":"ctrl-fd","controlType":"FreqDroop","isDefault":true,"priority":0,"request":{}})";
+    EXPECT_CALL(database_handler_mock,
+                get_der_controls_matching_criteria(_, std::optional<std::string>("FreqDroop"), _))
+        .WillOnce(Return(std::vector<std::string>{control_json}));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<GetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call(_, _)).Times(1);
+
+    der_control.handle_message(msg);
+}
+
+// =============================================================================
+// ClearDERControl tests (R04.FR.40-46)
+// =============================================================================
+
+// R04.FR.41 - controlType not found → NotFound
+TEST_F(DERControlTest, ClearDERControl_TypeNotFound_NotFound) {
+    DERControl der_control(functional_block_context);
+
+    ClearDERControlRequest req;
+    req.isDefault = true;
+    req.controlType = DERControlEnum::FreqDroop;
+
+    auto msg = make_clear_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock,
+                delete_der_controls_matching_criteria(true, std::optional<std::string>("FreqDroop")))
+        .WillOnce(Return(0));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<ClearDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::NotFound);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.42 - controlId not found → NotFound
+TEST_F(DERControlTest, ClearDERControl_ControlIdNotFound_NotFound) {
+    DERControl der_control(functional_block_context);
+
+    ClearDERControlRequest req;
+    req.isDefault = true;
+    req.controlId = "nonexistent-id";
+
+    auto msg = make_clear_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock, delete_der_control("nonexistent-id"))
+        .WillOnce(Return(false));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<ClearDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::NotFound);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.43 - Unsupported controlType, no controlId → NotSupported
+TEST_F(DERControlTest, ClearDERControl_UnsupportedType_NotSupported) {
+    DERControl der_control(functional_block_context);
+
+    ClearDERControlRequest req;
+    req.isDefault = true;
+    req.controlType = DERControlEnum::HFMustTrip; // Not in ModesSupported
+
+    auto msg = make_clear_der_control_msg(req);
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<ClearDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::NotSupported);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.44 - No controlType, no controlId → clear all by isDefault
+TEST_F(DERControlTest, ClearDERControl_AllByDefault_Accepted) {
+    DERControl der_control(functional_block_context);
+
+    ClearDERControlRequest req;
+    req.isDefault = true;
+
+    auto msg = make_clear_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock,
+                delete_der_controls_matching_criteria(true, std::optional<std::string>(std::nullopt)))
+        .WillOnce(Return(3));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<ClearDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.45 - controlType set, no controlId → clear by type and isDefault
+TEST_F(DERControlTest, ClearDERControl_ByType_Accepted) {
+    DERControl der_control(functional_block_context);
+
+    ClearDERControlRequest req;
+    req.isDefault = false;
+    req.controlType = DERControlEnum::VoltWatt;
+
+    auto msg = make_clear_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock,
+                delete_der_controls_matching_criteria(false, std::optional<std::string>("VoltWatt")))
+        .WillOnce(Return(2));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<ClearDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.46 - controlId set → clear specific control
+TEST_F(DERControlTest, ClearDERControl_ByControlId_Accepted) {
+    DERControl der_control(functional_block_context);
+
+    ClearDERControlRequest req;
+    req.isDefault = true;
+    req.controlId = "ctrl-to-delete";
+
+    auto msg = make_clear_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock, delete_der_control("ctrl-to-delete"))
+        .WillOnce(Return(true));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<ClearDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    der_control.handle_message(msg);
+}
