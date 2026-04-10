@@ -671,3 +671,109 @@ TEST_F(DERControlTest, NotifyStartStop_SupersedingControl_SendsSupersededIds) {
 
     der_control.handle_message(msg);
 }
+
+// =============================================================================
+// yUnit validation tests (R04.FR.50-56)
+// =============================================================================
+
+// R04.FR.50 - FreqWatt curve must have yUnit = PctMaxW or PctWAvail
+TEST_F(DERControlTest, SetDERControl_FreqWatt_WrongYUnit_Rejected) {
+    DERControl der_control(functional_block_context);
+
+    SetDERControlRequest req;
+    req.isDefault = true;
+    req.controlId = "ctrl-fw-bad-unit";
+    req.controlType = DERControlEnum::FreqWatt;
+    DERCurve curve;
+    curve.priority = 0;
+    curve.yUnit = DERUnitEnum::PctMaxVar; // Wrong — should be PctMaxW or PctWAvail
+    DERCurvePoints p1;
+    p1.x = 59.0f;
+    p1.y = 100.0f;
+    curve.curveData = {p1};
+    req.curve = curve;
+
+    auto msg = make_set_der_control_msg(req);
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<SetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Rejected);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.50 - FreqWatt curve with valid yUnit = PctMaxW accepted
+TEST_F(DERControlTest, SetDERControl_FreqWatt_ValidYUnit_Accepted) {
+    DERControl der_control(functional_block_context);
+
+    SetDERControlRequest req;
+    req.isDefault = true;
+    req.controlId = "ctrl-fw-good";
+    req.controlType = DERControlEnum::FreqWatt;
+    DERCurve curve;
+    curve.priority = 0;
+    curve.yUnit = DERUnitEnum::PctMaxW;
+    DERCurvePoints p1;
+    p1.x = 59.0f;
+    p1.y = 100.0f;
+    curve.curveData = {p1};
+    req.curve = curve;
+
+    auto msg = make_set_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock, get_der_controls_matching_criteria(_, _, _))
+        .WillOnce(Return(std::vector<std::string>{}));
+    EXPECT_CALL(database_handler_mock, insert_or_update_der_control(_, _, _, _, _, _, _, _)).Times(1);
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<SetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.52 - VoltVar curve must have yUnit = PctMaxVar or PctVarAvail
+TEST_F(DERControlTest, SetDERControl_VoltVar_WrongYUnit_Rejected) {
+    DERControl der_control(functional_block_context);
+
+    SetDERControlRequest req;
+    req.isDefault = true;
+    req.controlId = "ctrl-vv-bad-unit";
+    req.controlType = DERControlEnum::VoltVar;
+    DERCurve curve;
+    curve.priority = 0;
+    curve.yUnit = DERUnitEnum::PctMaxW; // Wrong — VoltVar needs PctMaxVar or PctVarAvail
+    DERCurvePoints p1;
+    p1.x = 0.97f;
+    p1.y = 100.0f;
+    curve.curveData = {p1};
+    req.curve = curve;
+
+    auto msg = make_set_der_control_msg(req);
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<SetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Rejected);
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.53 - VoltWatt curve must have yUnit = PctMaxW or PctWAvail
+TEST_F(DERControlTest, SetDERControl_VoltWatt_WrongYUnit_Rejected) {
+    DERControl der_control(functional_block_context);
+
+    auto req = make_volt_watt_curve_request("ctrl-vw-bad-unit", true, 0);
+    req.curve.value().yUnit = DERUnitEnum::PctMaxVar; // Wrong
+
+    auto msg = make_set_der_control_msg(req);
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<SetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Rejected);
+    }));
+
+    der_control.handle_message(msg);
+}

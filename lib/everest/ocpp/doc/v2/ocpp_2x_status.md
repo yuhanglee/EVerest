@@ -2758,8 +2758,8 @@ CSMS setpoint and Dynamic charging profiles from K01. There are no specific requ
 | R04.FR.07 | ✅     | Scheduled supersedes active (higher priority) |
 | R04.FR.08 | ✅     | Scheduled superseded by lower priority value |
 | R04.FR.09 | ✅     | Superseded controls not executed |
-| R04.FR.10 |        | Delete expired controls (timer not yet implemented) |
-| R04.FR.11 |        | Fall back to default after scheduled expires (timer not yet implemented) |
+| R04.FR.10 | ✅     | Delete expired controls (periodic timer check) |
+| R04.FR.11 |        | Fall back to default after scheduled expires |
 | R04.FR.12 | 🌐     | CSMS SHALL NOT send isDefault=true with startTime/duration |
 | R04.FR.13 | ✅     | Default with startTime/duration rejected |
 | R04.FR.14 | 🌐     | CSMS SHALL NOT send isDefault=false for EnterService/Gradients |
@@ -2771,7 +2771,7 @@ CSMS setpoint and Dynamic charging profiles from K01. There are no specific requ
 |           | **NotifyDERStartStop** | |
 | R04.FR.20 | ✅     | Send started=true when scheduled control starts |
 | R04.FR.21 | ✅     | Send started=true with supersededIds when superseding |
-| R04.FR.22 |        | Send started=false when control ends (timer not yet implemented) |
+| R04.FR.22 | ✅     | Send started=false when control expires (periodic timer check) |
 |           | **GetDERControl** | |
 | R04.FR.30 | ✅     | No matching controls returns NotFound |
 | R04.FR.31 | ✅     | requestId propagated to ReportDERControl |
@@ -2790,13 +2790,13 @@ CSMS setpoint and Dynamic charging profiles from K01. There are no specific requ
 | R04.FR.45 | ✅     | Clear by type and isDefault |
 | R04.FR.46 | ✅     | Clear by specific controlId |
 |           | **yUnits** | |
-| R04.FR.50 |        | FreqWatt curve yUnit validation |
-| R04.FR.51 |        | Trip curve yUnit validation |
-| R04.FR.52 |        | VoltVar curve yUnit validation |
-| R04.FR.53 |        | VoltWatt curve yUnit validation |
-| R04.FR.54 |        | WattPF curve yUnit validation |
-| R04.FR.55 |        | WattVar curve yUnit validation |
-| R04.FR.56 |        | LimitMaxDischarge element validation |
+| R04.FR.50 | ✅     | FreqWatt curve yUnit = PctMaxW or PctWAvail |
+| R04.FR.51 | ✅     | Trip curve yUnit = Not_Applicable |
+| R04.FR.52 | ✅     | VoltVar curve yUnit = PctMaxVar or PctVarAvail |
+| R04.FR.53 | ✅     | VoltWatt curve yUnit = PctMaxW or PctWAvail |
+| R04.FR.54 | ✅     | WattPF curve yUnit = Not_Applicable |
+| R04.FR.55 | ✅     | WattVar curve yUnit = PctMaxVar or PctVarAvail |
+| R04.FR.56 | ✅     | LimitMaxDischarge powerMonitoringMustTrip yUnit = Not_Applicable |
 
 ## DER Control - Charging station reporting a DER event (New in OCPP 2.1)
 

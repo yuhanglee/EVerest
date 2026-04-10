@@ -7,6 +7,8 @@
 #include <ocpp/v2/message_handler.hpp>
 #include <ocpp/v2/ocpp_enums.hpp>
 
+#include <everest/timer.hpp>
+
 #include <ocpp/v21/messages/ClearDERControl.hpp>
 #include <ocpp/v21/messages/GetDERControl.hpp>
 #include <ocpp/v21/messages/NotifyDERStartStop.hpp>
@@ -32,8 +34,12 @@ public:
     /// Check if a controlType is supported by any EVSE (DC or AC DERCtrlr)
     bool is_control_type_supported(v2::DERControlEnum control_type) const;
 
+    /// Periodic check for expired scheduled controls. Call this to trigger a manual check.
+    void check_scheduled_controls();
+
 private:
     const v2::FunctionalBlockContext& context;
+    Everest::SteadyTimer scheduled_control_timer;
 
     void handle_set_der_control(ocpp::Call<SetDERControlRequest> call);
     void handle_get_der_control(ocpp::Call<GetDERControlRequest> call);

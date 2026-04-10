@@ -106,12 +106,67 @@ bool has_start_time_or_duration(const SetDERControlRequest& req) {
     return get_start_time_from_request(req).has_value() || get_duration_from_request(req).has_value();
 }
 
+/// R04.FR.50-56: Validate yUnit for curve-based controlTypes
+bool validate_yunit(DERControlEnum control_type, const DERCurve& curve) {
+    auto unit = curve.yUnit;
+    switch (control_type) {
+    // R04.FR.50: FreqWatt → PctMaxW or PctWAvail
+    case DERControlEnum::FreqWatt:
+        return unit == DERUnitEnum::PctMaxW || unit == DERUnitEnum::PctWAvail;
+
+    // R04.FR.51: Trip curves → Not_Applicable
+    case DERControlEnum::HFMustTrip:
+    case DERControlEnum::HFMayTrip:
+    case DERControlEnum::HVMustTrip:
+    case DERControlEnum::HVMomCess:
+    case DERControlEnum::HVMayTrip:
+    case DERControlEnum::LFMustTrip:
+    case DERControlEnum::LVMustTrip:
+    case DERControlEnum::LVMomCess:
+    case DERControlEnum::LVMayTrip:
+    case DERControlEnum::PowerMonitoringMustTrip:
+        return unit == DERUnitEnum::Not_Applicable;
+
+    // R04.FR.52: VoltVar → PctMaxVar or PctVarAvail
+    case DERControlEnum::VoltVar:
+        return unit == DERUnitEnum::PctMaxVar || unit == DERUnitEnum::PctVarAvail;
+
+    // R04.FR.53: VoltWatt → PctMaxW or PctWAvail
+    case DERControlEnum::VoltWatt:
+        return unit == DERUnitEnum::PctMaxW || unit == DERUnitEnum::PctWAvail;
+
+    // R04.FR.54: WattPF → Not_Applicable
+    case DERControlEnum::WattPF:
+        return unit == DERUnitEnum::Not_Applicable;
+
+    // R04.FR.55: WattVar → PctMaxVar or PctVarAvail
+    case DERControlEnum::WattVar:
+        return unit == DERUnitEnum::PctMaxVar || unit == DERUnitEnum::PctVarAvail;
+
+    // Non-curve types — no yUnit validation needed
+    case DERControlEnum::EnterService:
+    case DERControlEnum::FreqDroop:
+    case DERControlEnum::FixedPFAbsorb:
+    case DERControlEnum::FixedPFInject:
+    case DERControlEnum::FixedVar:
+    case DERControlEnum::Gradients:
+    case DERControlEnum::LimitMaxDischarge:
+        return true;
+    }
+    return true;
+}
+
 } // anonymous namespace
 
 DERControl::DERControl(const v2::FunctionalBlockContext& context) : context(context) {
+    // Start periodic check for expired scheduled controls (every 30 seconds)
+    this->scheduled_control_timer.interval([this]() { this->check_scheduled_controls(); },
+                                            std::chrono::seconds(30));
 }
 
-DERControl::~DERControl() = default;
+DERControl::~DERControl() {
+    this->scheduled_control_timer.stop();
+}
 
 void DERControl::handle_message(const ocpp::EnhancedMessage<v2::MessageType>& message) {
     const auto& json_message = message.message;
@@ -170,6 +225,13 @@ bool DERControl::validate_control_fields(const SetDERControlRequest& req) const 
     case DERControlEnum::FixedVar:
         return req.fixedVar.has_value();
     case DERControlEnum::LimitMaxDischarge:
+        // R04.FR.56: If powerMonitoringMustTrip curve is present, its yUnit must be Not_Applicable
+        if (req.limitMaxDischarge.has_value() && req.limitMaxDischarge->powerMonitoringMustTrip.has_value()) {
+            if (!validate_yunit(DERControlEnum::PowerMonitoringMustTrip,
+                                req.limitMaxDischarge->powerMonitoringMustTrip.value())) {
+                return false;
+            }
+        }
         return req.limitMaxDischarge.has_value();
     case DERControlEnum::FreqDroop:
         return req.freqDroop.has_value();
@@ -177,7 +239,7 @@ bool DERControl::validate_control_fields(const SetDERControlRequest& req) const 
         return req.enterService.has_value();
     case DERControlEnum::Gradients:
         return req.gradient.has_value();
-    // All curve-based types require the curve field
+    // All curve-based types require the curve field + R04.FR.50-55 yUnit validation
     case DERControlEnum::FreqWatt:
     case DERControlEnum::HFMustTrip:
     case DERControlEnum::HFMayTrip:
@@ -193,7 +255,7 @@ bool DERControl::validate_control_fields(const SetDERControlRequest& req) const 
     case DERControlEnum::VoltWatt:
     case DERControlEnum::WattPF:
     case DERControlEnum::WattVar:
-        return req.curve.has_value();
+        return req.curve.has_value() && validate_yunit(req.controlType, req.curve.value());
     }
     return false;
 }
@@ -398,6 +460,49 @@ void DERControl::send_notify_start_stop(const CiString<36>& control_id, bool sta
 
     ocpp::Call<NotifyDERStartStopRequest> call(req);
     this->context.message_dispatcher.dispatch_call(call, false);
+}
+
+void DERControl::check_scheduled_controls() {
+    // Get all scheduled (non-default) controls
+    auto controls = this->context.database_handler.get_der_controls_matching_criteria(
+        std::optional<bool>(false), std::nullopt, std::nullopt);
+
+    auto now = ocpp::DateTime();
+
+    for (const auto& control_json_str : controls) {
+        try {
+            auto control = json::parse(control_json_str);
+            auto control_id = control.at("controlId").get<std::string>();
+            bool is_superseded = control.value("isSuperseded", false);
+
+            if (is_superseded) {
+                continue; // Skip superseded controls
+            }
+
+            if (!control.contains("startTime") || !control.contains("duration")) {
+                continue; // No expiry possible without both fields
+            }
+
+            auto start_str = control.at("startTime").get<std::string>();
+            auto duration_seconds = control.at("duration").get<float>();
+            auto start_time = ocpp::DateTime(start_str);
+
+            // Calculate expiry: startTime + duration
+            auto start_tp = start_time.to_time_point();
+            auto expiry_tp = start_tp + std::chrono::seconds(static_cast<int>(duration_seconds));
+            auto expiry = ocpp::DateTime(expiry_tp);
+
+            // R04.FR.10: Delete controls past startTime + duration
+            // R04.FR.22: Send NotifyDERStartStop with started=false
+            if (expiry <= now) {
+                this->send_notify_start_stop(CiString<36>(control_id), false, now, std::nullopt);
+                this->context.database_handler.delete_der_control(control_id);
+                EVLOG_info << "DER control " << control_id << " expired, deleted from database";
+            }
+        } catch (const json::exception& e) {
+            EVLOG_warning << "Failed to parse DER control JSON during scheduled check: " << e.what();
+        }
+    }
 }
 
 void DERControl::send_report(int32_t request_id, const std::vector<std::string>& control_jsons) {
