@@ -199,6 +199,37 @@ public:
 
     virtual CiString<20> get_charging_limit_source_for_profile(const int profile_id) = 0;
 
+    // DER Control persistence (OCPP 2.1 R04)
+
+    /// \brief Inserts or updates a DER control in DER_CONTROLS table
+    virtual void insert_or_update_der_control(const std::string& control_id, bool is_default,
+                                              const std::string& control_type, bool is_superseded,
+                                              int32_t priority, const std::optional<std::string>& start_time,
+                                              const std::optional<float>& duration,
+                                              const std::string& control_json) = 0;
+
+    /// \brief Retrieves a single DER control by control_id
+    virtual std::optional<std::string> get_der_control(const std::string& control_id) = 0;
+
+    /// \brief Retrieves all DER controls
+    virtual std::vector<std::string> get_all_der_controls() = 0;
+
+    /// \brief Retrieves DER controls matching optional filter criteria
+    virtual std::vector<std::string>
+    get_der_controls_matching_criteria(const std::optional<bool>& is_default,
+                                       const std::optional<std::string>& control_type,
+                                       const std::optional<std::string>& control_id) = 0;
+
+    /// \brief Deletes a DER control by control_id. Returns true if a row was deleted.
+    virtual bool delete_der_control(const std::string& control_id) = 0;
+
+    /// \brief Deletes DER controls matching is_default and optional control_type. Returns number of rows deleted.
+    virtual int delete_der_controls_matching_criteria(bool is_default,
+                                                      const std::optional<std::string>& control_type) = 0;
+
+    /// \brief Updates the is_superseded flag for a DER control
+    virtual void update_der_control_superseded(const std::string& control_id, bool is_superseded) = 0;
+
     virtual std::unique_ptr<everest::db::sqlite::StatementInterface> new_statement(const std::string& sql) = 0;
 };
 
@@ -284,6 +315,22 @@ public:
     std::vector<v2::ChargingProfile> get_all_charging_profiles() override;
     std::map<std::int32_t, std::vector<v2::ChargingProfile>> get_all_charging_profiles_group_by_evse() override;
     CiString<20> get_charging_limit_source_for_profile(const int profile_id) override;
+
+    // DER Control persistence
+    void insert_or_update_der_control(const std::string& control_id, bool is_default,
+                                      const std::string& control_type, bool is_superseded, int32_t priority,
+                                      const std::optional<std::string>& start_time,
+                                      const std::optional<float>& duration,
+                                      const std::string& control_json) override;
+    std::optional<std::string> get_der_control(const std::string& control_id) override;
+    std::vector<std::string> get_all_der_controls() override;
+    std::vector<std::string> get_der_controls_matching_criteria(const std::optional<bool>& is_default,
+                                                                 const std::optional<std::string>& control_type,
+                                                                 const std::optional<std::string>& control_id) override;
+    bool delete_der_control(const std::string& control_id) override;
+    int delete_der_controls_matching_criteria(bool is_default,
+                                              const std::optional<std::string>& control_type) override;
+    void update_der_control_superseded(const std::string& control_id, bool is_superseded) override;
 
     std::unique_ptr<everest::db::sqlite::StatementInterface> new_statement(const std::string& sql) override;
 };
