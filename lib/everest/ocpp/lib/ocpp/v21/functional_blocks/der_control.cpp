@@ -291,6 +291,19 @@ void DERControl::handle_set_der_control(ocpp::Call<SetDERControlRequest> call) {
 
     ocpp::CallResult<SetDERControlResponse> call_result(response, call.uniqueId);
     this->context.message_dispatcher.dispatch_call_result(call_result);
+
+    // R04.FR.20: If this is a scheduled control and startTime <= now, notify immediate start
+    if (!request.isDefault && start_time.has_value()) {
+        auto now = ocpp::DateTime();
+        auto control_start = ocpp::DateTime(start_time.value());
+        if (control_start <= now) {
+            std::optional<std::vector<CiString<36>>> superseded_opt;
+            if (!superseded_ids.empty()) {
+                superseded_opt = superseded_ids;
+            }
+            this->send_notify_start_stop(request.controlId, true, now, superseded_opt);
+        }
+    }
 }
 
 void DERControl::handle_get_der_control(ocpp::Call<GetDERControlRequest> call) {
@@ -374,10 +387,17 @@ void DERControl::handle_clear_der_control(ocpp::Call<ClearDERControlRequest> cal
     this->context.message_dispatcher.dispatch_call_result(call_result);
 }
 
-void DERControl::send_notify_start_stop(const CiString<36>& /*control_id*/, bool /*started*/,
-                                         const ocpp::DateTime& /*timestamp*/,
-                                         const std::optional<std::vector<CiString<36>>>& /*superseded_ids*/) {
-    // TODO: Implement in Task 6
+void DERControl::send_notify_start_stop(const CiString<36>& control_id, bool started,
+                                         const ocpp::DateTime& timestamp,
+                                         const std::optional<std::vector<CiString<36>>>& superseded_ids) {
+    NotifyDERStartStopRequest req;
+    req.controlId = control_id;
+    req.started = started;
+    req.timestamp = timestamp;
+    req.supersededIds = superseded_ids;
+
+    ocpp::Call<NotifyDERStartStopRequest> call(req);
+    this->context.message_dispatcher.dispatch_call(call, false);
 }
 
 void DERControl::send_report(int32_t request_id, const std::vector<std::string>& control_jsons) {

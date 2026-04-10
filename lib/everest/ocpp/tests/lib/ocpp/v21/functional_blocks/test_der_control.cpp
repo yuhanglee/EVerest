@@ -583,3 +583,91 @@ TEST_F(DERControlTest, ClearDERControl_ByControlId_Accepted) {
 
     der_control.handle_message(msg);
 }
+
+// =============================================================================
+// NotifyDERStartStop tests (R04.FR.20-22)
+// =============================================================================
+
+// R04.FR.20 - When a scheduled control's startTime arrives, CS sends NotifyDERStartStop started=true
+// We test this by sending a SetDERControl with startTime in the past → should trigger immediate start notification
+TEST_F(DERControlTest, NotifyStartStop_ImmediateStart_SendsNotification) {
+    DERControl der_control(functional_block_context);
+
+    auto req = make_freq_droop_request("ctrl-immediate", false, 0);
+    // Set startTime to now (effectively immediate)
+    req.freqDroop.value().startTime = ocpp::DateTime();
+    req.freqDroop.value().duration = 3600.0f;
+    auto msg = make_set_der_control_msg(req);
+
+    EXPECT_CALL(database_handler_mock,
+                get_der_controls_matching_criteria(std::optional<bool>(false), std::optional<std::string>("FreqDroop"),
+                                                   std::optional<std::string>(std::nullopt)))
+        .WillOnce(Return(std::vector<std::string>{}));
+
+    EXPECT_CALL(database_handler_mock,
+                insert_or_update_der_control("ctrl-immediate", false, "FreqDroop", false, 0, _, _, _))
+        .Times(1);
+
+    // Expect SetDERControlResponse (Accepted)
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<SetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    // R04.FR.20: Expect NotifyDERStartStop with started=true
+    EXPECT_CALL(mock_dispatcher, dispatch_call(_, _))
+        .WillOnce(Invoke([](const json& call, bool /*triggered*/) {
+            // Verify it's a NotifyDERStartStop call
+            auto action = call[ocpp::CALL_ACTION].get<std::string>();
+            EXPECT_EQ(action, "NotifyDERStartStop");
+            auto payload = call[ocpp::CALL_PAYLOAD];
+            EXPECT_EQ(payload["controlId"], "ctrl-immediate");
+            EXPECT_TRUE(payload["started"].get<bool>());
+        }));
+
+    der_control.handle_message(msg);
+}
+
+// R04.FR.21 - When a new control supersedes an active one, send NotifyDERStartStop with supersededIds
+TEST_F(DERControlTest, NotifyStartStop_SupersedingControl_SendsSupersededIds) {
+    DERControl der_control(functional_block_context);
+
+    auto req = make_freq_droop_request("ctrl-higher-prio", false, 0); // priority 0 = highest
+    req.freqDroop.value().startTime = ocpp::DateTime();
+    req.freqDroop.value().duration = 3600.0f;
+    auto msg = make_set_der_control_msg(req);
+
+    // Return an existing active control with lower priority (higher value)
+    std::string existing = R"({"controlId":"ctrl-lower-prio","controlType":"FreqDroop","isDefault":false,"priority":5})";
+    EXPECT_CALL(database_handler_mock,
+                get_der_controls_matching_criteria(std::optional<bool>(false), std::optional<std::string>("FreqDroop"),
+                                                   std::optional<std::string>(std::nullopt)))
+        .WillOnce(Return(std::vector<std::string>{existing}));
+
+    EXPECT_CALL(database_handler_mock, update_der_control_superseded("ctrl-lower-prio", true)).Times(1);
+    EXPECT_CALL(database_handler_mock,
+                insert_or_update_der_control("ctrl-higher-prio", false, "FreqDroop", false, 0, _, _, _))
+        .Times(1);
+
+    // Expect SetDERControlResponse with supersededIds
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<SetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+        ASSERT_TRUE(response.supersededIds.has_value());
+        EXPECT_EQ(response.supersededIds->size(), 1);
+        EXPECT_EQ(response.supersededIds->at(0).get(), "ctrl-lower-prio");
+    }));
+
+    // Expect NotifyDERStartStop with started=true and supersededIds
+    EXPECT_CALL(mock_dispatcher, dispatch_call(_, _))
+        .WillOnce(Invoke([](const json& call, bool /*triggered*/) {
+            auto payload = call[ocpp::CALL_PAYLOAD];
+            EXPECT_EQ(payload["controlId"], "ctrl-higher-prio");
+            EXPECT_TRUE(payload["started"].get<bool>());
+            ASSERT_TRUE(payload.contains("supersededIds"));
+            EXPECT_EQ(payload["supersededIds"].size(), 1);
+            EXPECT_EQ(payload["supersededIds"][0], "ctrl-lower-prio");
+        }));
+
+    der_control.handle_message(msg);
+}
