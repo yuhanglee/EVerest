@@ -143,6 +143,8 @@ std::string profile_validation_result_to_string(ProfileValidationResultEnum e) {
         return "ChargingSchedulePeriodNoFreqWattCurve";
     case ocpp::v2::ProfileValidationResultEnum::ChargingSchedulePeriodSignDifference:
         return "ChargingSchedulePeriodSignDifference";
+    case ocpp::v2::ProfileValidationResultEnum::ChargingSchedulePeriodSetpointOutOfRange:
+        return "ChargingSchedulePeriodSetpointOutOfRange";
     case ProfileValidationResultEnum::ChargingStationMaxProfileCannotBeRelative:
         return "ChargingStationMaxProfileCannotBeRelative";
     case ProfileValidationResultEnum::ChargingStationMaxProfileEvseIdGreaterThanZero:
@@ -205,6 +207,7 @@ std::string profile_validation_result_to_reason_code(ProfileValidationResultEnum
     case ProfileValidationResultEnum::ChargingSchedulePeriodUnsupportedOperationMode:
     case ProfileValidationResultEnum::ChargingSchedulePeriodUnsupportedLimitSetpoint:
     case ProfileValidationResultEnum::ChargingSchedulePeriodSignDifference:
+    case ProfileValidationResultEnum::ChargingSchedulePeriodSetpointOutOfRange:
         return "InvalidSchedule";
     case ProfileValidationResultEnum::ChargingSchedulePeriodNoPhaseForDC:
         return "NoPhaseForDC";
@@ -957,6 +960,18 @@ ProfileValidationResultEnum SmartCharging::validate_profile_schedules(ChargingPr
                 // in the 2.1 spec).
                 if (!check_limits_and_setpoints(charging_schedule_period)) {
                     return ProfileValidationResultEnum::ChargingSchedulePeriodUnsupportedLimitSetpoint;
+                }
+
+                // V2X.05: Reject if setpoint lies outside the range [dischargeLimit, limit].
+                if (charging_schedule_period.setpoint.has_value()) {
+                    const float sp = charging_schedule_period.setpoint.value();
+                    if (charging_schedule_period.limit.has_value() && sp > charging_schedule_period.limit.value()) {
+                        return ProfileValidationResultEnum::ChargingSchedulePeriodSetpointOutOfRange;
+                    }
+                    if (charging_schedule_period.dischargeLimit.has_value() &&
+                        sp < charging_schedule_period.dischargeLimit.value()) {
+                        return ProfileValidationResultEnum::ChargingSchedulePeriodSetpointOutOfRange;
+                    }
                 }
 
                 // Q08.FR.02: v2xBaseline and v2xFreqWattCurve must be set when operation mode is LocalFrequency.
