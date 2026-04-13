@@ -3,6 +3,7 @@
 
 #include <ocpp/v2/functional_blocks/smart_charging.hpp>
 
+#include <cmath>
 #include <optional>
 
 #include <ocpp/common/constants.hpp>
@@ -67,6 +68,45 @@ void conform_validity_periods(ChargingProfile& profile) {
         profile.validTo = validTo;
     }
 }
+
+/// \brief Returns true if any float field in \p period is non-finite (infinity or NaN).
+/// Such values originate from float overflow (e.g. a max-double sent by a CSMS) and would be
+/// serialized as JSON null
+bool has_non_finite_float(const ChargingSchedulePeriod& period) {
+    auto non_finite = [](const std::optional<float>& v) { return v.has_value() && !std::isfinite(v.value()); };
+    if (non_finite(period.limit) || non_finite(period.limit_L2) || non_finite(period.limit_L3) ||
+        non_finite(period.dischargeLimit) || non_finite(period.dischargeLimit_L2) ||
+        non_finite(period.dischargeLimit_L3) || non_finite(period.setpoint) || non_finite(period.setpoint_L2) ||
+        non_finite(period.setpoint_L3) || non_finite(period.setpointReactive) ||
+        non_finite(period.setpointReactive_L2) || non_finite(period.setpointReactive_L3) ||
+        non_finite(period.v2xBaseline)) {
+        return true;
+    }
+    if (period.v2xFreqWattCurve.has_value()) {
+        for (const auto& point : period.v2xFreqWattCurve.value()) {
+            if (!std::isfinite(point.frequency) || !std::isfinite(point.power)) {
+                return true;
+            }
+        }
+    }
+    if (period.v2xSignalWattCurve.has_value()) {
+        for (const auto& point : period.v2xSignalWattCurve.value()) {
+            if (!std::isfinite(point.power)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/// \brief Returns true if any float field in \p schedule is non-finite (infinity or NaN).
+bool has_non_finite_float(const ChargingSchedule& schedule) {
+    auto non_finite = [](const std::optional<float>& v) { return v.has_value() && !std::isfinite(v.value()); };
+    if (non_finite(schedule.minChargingRate) || non_finite(schedule.powerTolerance)) {
+        return true;
+    }
+    return schedule.limitAtSoC.has_value() && !std::isfinite(schedule.limitAtSoC.value().limit);
+}
 } // namespace
 namespace conversions {
 std::string profile_validation_result_to_string(ProfileValidationResultEnum e) {
@@ -109,6 +149,8 @@ std::string profile_validation_result_to_string(ProfileValidationResultEnum e) {
         return "ChargingProfileNotDynamic";
     case ProfileValidationResultEnum::ChargingScheduleChargingRateUnitUnsupported:
         return "ChargingScheduleChargingRateUnitUnsupported";
+    case ProfileValidationResultEnum::ChargingScheduleNonFiniteValue:
+        return "ChargingScheduleNonFiniteValue";
     case ProfileValidationResultEnum::ChargingSchedulePriorityExtranousDuration:
         return "ChargingSchedulePriorityExtranousDuration";
     case ProfileValidationResultEnum::ChargingScheduleRandomizedDelay:
@@ -155,6 +197,8 @@ std::string profile_validation_result_to_string(ProfileValidationResultEnum e) {
         return "RequestStartTransactionNonTxProfile";
     case ProfileValidationResultEnum::ChargingProfileEmptyChargingSchedules:
         return "ChargingProfileEmptyChargingSchedules";
+    case ProfileValidationResultEnum::ChargingSchedulePeriodNonFiniteValue:
+        return "ChargingSchedulePeriodNonFiniteValue";
     }
 
     throw EnumToStringException{e, "ProfileValidationResultEnum"};
@@ -190,6 +234,7 @@ std::string profile_validation_result_to_reason_code(ProfileValidationResultEnum
     case ProfileValidationResultEnum::ChargingProfileMissingRequiredStartSchedule:
     case ProfileValidationResultEnum::ChargingProfileExtraneousStartSchedule:
     case ProfileValidationResultEnum::ChargingProfileEmptyChargingSchedules:
+    case ProfileValidationResultEnum::ChargingScheduleNonFiniteValue:
     case ProfileValidationResultEnum::ChargingSchedulePriorityExtranousDuration:
     case ProfileValidationResultEnum::ChargingScheduleRandomizedDelay:
     case ProfileValidationResultEnum::ChargingScheduleUnsupportedLocalTime:
@@ -205,6 +250,7 @@ std::string profile_validation_result_to_reason_code(ProfileValidationResultEnum
     case ProfileValidationResultEnum::ChargingSchedulePeriodUnsupportedOperationMode:
     case ProfileValidationResultEnum::ChargingSchedulePeriodUnsupportedLimitSetpoint:
     case ProfileValidationResultEnum::ChargingSchedulePeriodSignDifference:
+    case ProfileValidationResultEnum::ChargingSchedulePeriodNonFiniteValue:
         return "InvalidSchedule";
     case ProfileValidationResultEnum::ChargingSchedulePeriodNoPhaseForDC:
         return "NoPhaseForDC";
@@ -807,6 +853,10 @@ ProfileValidationResultEnum SmartCharging::validate_profile_schedules(ChargingPr
             return ProfileValidationResultEnum::ChargingProfileNoChargingSchedulePeriods;
         }
 
+        if (has_non_finite_float(schedule)) {
+            return ProfileValidationResultEnum::ChargingScheduleNonFiniteValue;
+        }
+
         if (this->context.ocpp_version == OcppProtocolVersion::v21) {
             // K01.FR.95 Other profiles than TxProfle or TxDefaultProfile can not have a randomized delay.
             if (profile.chargingProfilePurpose != ChargingProfilePurposeEnum::TxProfile &&
@@ -867,6 +917,11 @@ ProfileValidationResultEnum SmartCharging::validate_profile_schedules(ChargingPr
 
         for (auto i = 0; i < schedule.chargingSchedulePeriod.size(); i++) {
             auto& charging_schedule_period = schedule.chargingSchedulePeriod[i];
+
+            if (has_non_finite_float(charging_schedule_period)) {
+                return ProfileValidationResultEnum::ChargingSchedulePeriodNonFiniteValue;
+            }
+
             // K01.FR.48 and K01.FR.19
             if (charging_schedule_period.numberPhases != 1 && charging_schedule_period.phaseToUse.has_value()) {
                 return ProfileValidationResultEnum::ChargingSchedulePeriodInvalidPhaseToUse;
