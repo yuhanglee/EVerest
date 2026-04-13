@@ -505,18 +505,188 @@ void DERControl::check_scheduled_controls() {
     }
 }
 
-void DERControl::send_report(int32_t request_id, const std::vector<std::string>& control_jsons) {
-    // Build a ReportDERControlRequest from the stored control JSONs
-    // R04.FR.31: Set requestId from GetDERControl request
+namespace {
+
+/// Maximum number of controls per ReportDERControl message. If more controls are
+/// present, the report is split into multiple messages using the tbc flag.
+constexpr size_t MAX_CONTROLS_PER_REPORT_MESSAGE = 10;
+
+/// Build a ReportDERControlRequest populated with the given controls.
+/// Each control JSON is parsed and sorted into the appropriate *Get vector.
+ReportDERControlRequest build_report(int32_t request_id, const std::vector<std::string>& control_jsons,
+                                      bool tbc) {
     ReportDERControlRequest report;
     report.requestId = request_id;
 
-    // For now, send a single report message (R04.FR.32: tbc=false for last/only message)
-    // TODO: Handle multi-message reports for large result sets
+    std::vector<DERCurveGet> curves;
+    std::vector<EnterServiceGet> enter_services;
+    std::vector<FixedPFGet> fixed_pf_absorbs;
+    std::vector<FixedPFGet> fixed_pf_injects;
+    std::vector<FixedVarGet> fixed_vars;
+    std::vector<FreqDroopGet> freq_droops;
+    std::vector<GradientGet> gradients;
+    std::vector<LimitMaxDischargeGet> limit_max_discharges;
 
-    // Dispatch the report as a CALL (CS→CSMS)
-    ocpp::Call<ReportDERControlRequest> report_call(report);
-    this->context.message_dispatcher.dispatch_call(report_call, false);
+    for (const auto& control_json_str : control_jsons) {
+        try {
+            auto stored = json::parse(control_json_str);
+            auto control_id = stored.at("controlId").get<std::string>();
+            auto control_type_str = stored.at("controlType").get<std::string>();
+            bool is_default = stored.value("isDefault", false);
+            bool is_superseded = stored.value("isSuperseded", false);
+            auto control_type = v2::conversions::string_to_dercontrol_enum(control_type_str);
+            const auto& request_json = stored.at("request");
+
+            // Route each control into the appropriate *Get vector based on type
+            switch (control_type) {
+            case DERControlEnum::FixedPFAbsorb: {
+                FixedPFGet get;
+                get.fixedPF = request_json.at("fixedPFAbsorb").get<FixedPF>();
+                get.id = control_id;
+                get.isDefault = is_default;
+                get.isSuperseded = is_superseded;
+                fixed_pf_absorbs.push_back(get);
+                break;
+            }
+            case DERControlEnum::FixedPFInject: {
+                FixedPFGet get;
+                get.fixedPF = request_json.at("fixedPFInject").get<FixedPF>();
+                get.id = control_id;
+                get.isDefault = is_default;
+                get.isSuperseded = is_superseded;
+                fixed_pf_injects.push_back(get);
+                break;
+            }
+            case DERControlEnum::FixedVar: {
+                FixedVarGet get;
+                get.fixedVar = request_json.at("fixedVar").get<FixedVar>();
+                get.id = control_id;
+                get.isDefault = is_default;
+                get.isSuperseded = is_superseded;
+                fixed_vars.push_back(get);
+                break;
+            }
+            case DERControlEnum::FreqDroop: {
+                FreqDroopGet get;
+                get.freqDroop = request_json.at("freqDroop").get<FreqDroop>();
+                get.id = control_id;
+                get.isDefault = is_default;
+                get.isSuperseded = is_superseded;
+                freq_droops.push_back(get);
+                break;
+            }
+            case DERControlEnum::EnterService: {
+                EnterServiceGet get;
+                get.enterService = request_json.at("enterService").get<EnterService>();
+                get.id = control_id;
+                enter_services.push_back(get);
+                break;
+            }
+            case DERControlEnum::Gradients: {
+                GradientGet get;
+                get.gradient = request_json.at("gradient").get<Gradient>();
+                get.id = control_id;
+                gradients.push_back(get);
+                break;
+            }
+            case DERControlEnum::LimitMaxDischarge: {
+                LimitMaxDischargeGet get;
+                get.limitMaxDischarge = request_json.at("limitMaxDischarge").get<LimitMaxDischarge>();
+                get.id = control_id;
+                get.isDefault = is_default;
+                get.isSuperseded = is_superseded;
+                limit_max_discharges.push_back(get);
+                break;
+            }
+            // All curve-based types
+            case DERControlEnum::FreqWatt:
+            case DERControlEnum::HFMustTrip:
+            case DERControlEnum::HFMayTrip:
+            case DERControlEnum::HVMustTrip:
+            case DERControlEnum::HVMomCess:
+            case DERControlEnum::HVMayTrip:
+            case DERControlEnum::LFMustTrip:
+            case DERControlEnum::LVMustTrip:
+            case DERControlEnum::LVMomCess:
+            case DERControlEnum::LVMayTrip:
+            case DERControlEnum::PowerMonitoringMustTrip:
+            case DERControlEnum::VoltVar:
+            case DERControlEnum::VoltWatt:
+            case DERControlEnum::WattPF:
+            case DERControlEnum::WattVar: {
+                DERCurveGet get;
+                get.curve = request_json.at("curve").get<DERCurve>();
+                get.id = control_id;
+                get.curveType = control_type;
+                get.isDefault = is_default;
+                get.isSuperseded = is_superseded;
+                curves.push_back(get);
+                break;
+            }
+            }
+        } catch (const std::exception& e) {
+            EVLOG_warning << "Failed to parse stored DER control for report: " << e.what();
+        }
+    }
+
+    if (!curves.empty()) {
+        report.curve = curves;
+    }
+    if (!enter_services.empty()) {
+        report.enterService = enter_services;
+    }
+    if (!fixed_pf_absorbs.empty()) {
+        report.fixedPFAbsorb = fixed_pf_absorbs;
+    }
+    if (!fixed_pf_injects.empty()) {
+        report.fixedPFInject = fixed_pf_injects;
+    }
+    if (!fixed_vars.empty()) {
+        report.fixedVar = fixed_vars;
+    }
+    if (!freq_droops.empty()) {
+        report.freqDroop = freq_droops;
+    }
+    if (!gradients.empty()) {
+        report.gradient = gradients;
+    }
+    if (!limit_max_discharges.empty()) {
+        report.limitMaxDischarge = limit_max_discharges;
+    }
+
+    // R04.FR.32: set tbc=true for all but the last message in a multi-message report
+    if (tbc) {
+        report.tbc = true;
+    }
+
+    return report;
+}
+
+} // anonymous namespace
+
+void DERControl::send_report(int32_t request_id, const std::vector<std::string>& control_jsons) {
+    // R04.FR.32: Split into multiple messages if we have more than MAX controls
+    const size_t total = control_jsons.size();
+    if (total == 0) {
+        return;
+    }
+
+    size_t index = 0;
+    while (index < total) {
+        size_t chunk_end = std::min(index + MAX_CONTROLS_PER_REPORT_MESSAGE, total);
+        bool is_last = (chunk_end == total);
+
+        std::vector<std::string> chunk(control_jsons.begin() + static_cast<long>(index),
+                                        control_jsons.begin() + static_cast<long>(chunk_end));
+
+        // R04.FR.31: requestId set in every message; R04.FR.32: tbc=true except for last
+        auto report = build_report(request_id, chunk, !is_last);
+
+        ocpp::Call<ReportDERControlRequest> report_call(report);
+        this->context.message_dispatcher.dispatch_call(report_call, false);
+
+        index = chunk_end;
+    }
 }
 
 } // namespace ocpp::v21

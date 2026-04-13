@@ -777,3 +777,107 @@ TEST_F(DERControlTest, SetDERControl_VoltWatt_WrongYUnit_Rejected) {
 
     der_control.handle_message(msg);
 }
+
+// =============================================================================
+// ReportDERControl population tests (R04.FR.31-32)
+// =============================================================================
+
+// ReportDERControl populates curve field from a VoltWatt stored control (R04.FR.31)
+TEST_F(DERControlTest, GetDERControl_ReportPopulatesCurveField) {
+    DERControl der_control(functional_block_context);
+
+    GetDERControlRequest req;
+    req.requestId = 42;
+    req.controlType = DERControlEnum::VoltWatt;
+    auto msg = make_get_der_control_msg(req);
+
+    // Build stored JSON for a VoltWatt curve control
+    json stored;
+    stored["controlId"] = "ctrl-vw-1";
+    stored["controlType"] = "VoltWatt";
+    stored["isDefault"] = true;
+    stored["priority"] = 0;
+    json request;
+    request["isDefault"] = true;
+    request["controlId"] = "ctrl-vw-1";
+    request["controlType"] = "VoltWatt";
+    json curve;
+    curve["priority"] = 0;
+    curve["yUnit"] = "PctMaxW";
+    json point;
+    point["x"] = 0.97;
+    point["y"] = 100.0;
+    curve["curveData"] = json::array({point});
+    request["curve"] = curve;
+    stored["request"] = request;
+
+    EXPECT_CALL(database_handler_mock, get_der_controls_matching_criteria(_, _, _))
+        .WillOnce(Return(std::vector<std::string>{stored.dump()}));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& call_result) {
+        auto response = call_result[ocpp::CALLRESULT_PAYLOAD].get<GetDERControlResponse>();
+        EXPECT_EQ(response.status, DERControlStatusEnum::Accepted);
+    }));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call(_, _)).WillOnce(Invoke([](const json& call, bool /*t*/) {
+        auto action = call[ocpp::CALL_ACTION].get<std::string>();
+        EXPECT_EQ(action, "ReportDERControl");
+        auto payload = call[ocpp::CALL_PAYLOAD];
+        EXPECT_EQ(payload["requestId"], 42);
+        ASSERT_TRUE(payload.contains("curve"));
+        EXPECT_EQ(payload["curve"].size(), 1);
+        EXPECT_EQ(payload["curve"][0]["id"], "ctrl-vw-1");
+        EXPECT_EQ(payload["curve"][0]["curveType"], "VoltWatt");
+        EXPECT_EQ(payload["curve"][0]["isDefault"], true);
+        EXPECT_EQ(payload["curve"][0]["isSuperseded"], false);
+        // Single-message report — tbc should be false or absent
+        if (payload.contains("tbc")) {
+            EXPECT_FALSE(payload["tbc"].get<bool>());
+        }
+    }));
+
+    der_control.handle_message(msg);
+}
+
+// ReportDERControl populates freqDroop field from a FreqDroop stored control
+TEST_F(DERControlTest, GetDERControl_ReportPopulatesFreqDroopField) {
+    DERControl der_control(functional_block_context);
+
+    GetDERControlRequest req;
+    req.requestId = 7;
+    req.controlType = DERControlEnum::FreqDroop;
+    auto msg = make_get_der_control_msg(req);
+
+    json stored;
+    stored["controlId"] = "ctrl-fd-1";
+    stored["controlType"] = "FreqDroop";
+    stored["isDefault"] = true;
+    stored["priority"] = 0;
+    json request;
+    request["isDefault"] = true;
+    request["controlId"] = "ctrl-fd-1";
+    request["controlType"] = "FreqDroop";
+    json fd;
+    fd["priority"] = 0;
+    fd["overFreq"] = 61.0;
+    fd["underFreq"] = 59.0;
+    fd["overDroop"] = 5.0;
+    fd["underDroop"] = 5.0;
+    fd["responseTime"] = 3.0;
+    request["freqDroop"] = fd;
+    stored["request"] = request;
+
+    EXPECT_CALL(database_handler_mock, get_der_controls_matching_criteria(_, _, _))
+        .WillOnce(Return(std::vector<std::string>{stored.dump()}));
+
+    EXPECT_CALL(mock_dispatcher, dispatch_call_result(_)).WillOnce(Invoke([](const json& /*c*/) {}));
+    EXPECT_CALL(mock_dispatcher, dispatch_call(_, _)).WillOnce(Invoke([](const json& call, bool /*t*/) {
+        auto payload = call[ocpp::CALL_PAYLOAD];
+        ASSERT_TRUE(payload.contains("freqDroop"));
+        EXPECT_EQ(payload["freqDroop"].size(), 1);
+        EXPECT_EQ(payload["freqDroop"][0]["id"], "ctrl-fd-1");
+        EXPECT_FALSE(payload.contains("curve"));
+    }));
+
+    der_control.handle_message(msg);
+}
