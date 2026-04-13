@@ -15,11 +15,11 @@
         {
           "type": "Actual",
           "mutability": "ReadWrite",
-          "value": true
+          "value": false
         }
       ],
-      "description": "Whether DC DER control is supported by this EVSE.",
-      "default": true,
+      "description": "Whether DC DER control is supported by this EVSE. Default disabled; set to true to enable DER control on this EVSE.",
+      "default": false,
       "type": "boolean"
     },
     "DCDERCtrlrModesSupported": {
@@ -33,7 +33,7 @@
         {
           "type": "Actual",
           "mutability": "ReadOnly",
-          "value": "EnterService,FreqDroop,FreqWatt,FixedPFAbsorb,FixedPFInject,FixedVar,Gradients,LimitMaxDischarge,VoltVar,VoltWatt"
+          "value": "FreqDroop,FreqWatt,VoltWatt,LimitMaxDischarge,VoltVar,FixedVar,EnterService,Gradients"
         }
       ],
       "description": "List of DER control modes supported by the DC inverter of this EVSE.",
