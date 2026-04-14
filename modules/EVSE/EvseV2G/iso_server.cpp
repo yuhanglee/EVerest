@@ -589,6 +589,7 @@ static enum v2g_event handle_iso_session_setup(struct v2g_connection* conn) {
 
     /* TODO: publish EVCCID to MQTT */
 
+    // An overflow check is already done in ISO15118_chargerImpl.cpp
     res->EVSEID.charactersLen = conn->ctx->evse_v2g_data.evse_id.bytesLen;
     memcpy(res->EVSEID.characters, conn->ctx->evse_v2g_data.evse_id.bytes, conn->ctx->evse_v2g_data.evse_id.bytesLen);
 
@@ -648,6 +649,7 @@ static enum v2g_event handle_iso_service_discovery(struct v2g_connection* conn) 
              "PnC is not allowed without TLS-communication. Correcting value to '1' (ExternalPayment)");
     }
 
+    // TODO(SL): Check if payment_option_list vector has two or fewer elements
     memcpy(res->PaymentOptionList.PaymentOption.array, conn->ctx->evse_v2g_data.payment_option_list.data(),
            conn->ctx->evse_v2g_data.payment_option_list.size() * sizeof(iso2_paymentOptionType));
     res->PaymentOptionList.PaymentOption.arrayLen = conn->ctx->evse_v2g_data.payment_option_list.size();
@@ -1104,6 +1106,7 @@ static enum v2g_event handle_iso_payment_details(struct v2g_connection* conn) {
             }
         }
 
+        // TODO(SL): session.gen_challenge should use GEN_CHALLENGE_SIZE and not magic number
         generate_random_data(&conn->ctx->session.gen_challenge, GEN_CHALLENGE_SIZE);
         memcpy(res->GenChallenge.bytes, conn->ctx->session.gen_challenge, GEN_CHALLENGE_SIZE);
         res->GenChallenge.bytesLen = GEN_CHALLENGE_SIZE;
@@ -1853,7 +1856,7 @@ static enum v2g_event handle_iso_certificate_installation(struct v2g_connection*
         (conn->ctx->evse_v2g_data.cert_install_status == true)) {
         const auto data = openssl::base64_decode(conn->ctx->evse_v2g_data.cert_install_res_b64_buffer.data(),
                                                  conn->ctx->evse_v2g_data.cert_install_res_b64_buffer.size());
-        if (data.empty() || (data.size() > DEFAULT_BUFFER_SIZE)) {
+        if (data.empty() || (data.size() > DEFAULT_BUFFER_SIZE - V2GTP_HEADER_LENGTH)) {
             dlog(DLOG_LEVEL_ERROR, "Failed to decode base64 stream");
             goto exit;
         } else {
