@@ -520,6 +520,12 @@ struct Reset_def       : public state_machine_def<Reset_def> {
               LOG_STATE_ENTRY;
       }
     };
+    struct MsgSent   : public state<>{
+        template <class Event, class Fsm> void on_entry(Event const& e, Fsm& fsm) {
+              LOG_STATE_ENTRY;
+      }
+    };
+
     struct MsgValid  : public state<>{
         template <class Event, class Fsm> void on_entry(Event const& e, Fsm& fsm) {
               LOG_STATE_ENTRY;
@@ -544,15 +550,25 @@ struct Reset_def       : public state_machine_def<Reset_def> {
             return fsm.ctx->slac_config.chip_reset.enabled;
         };
     };
+    //Actions
+    struct send_set_key_req {
+        template <class Fsm, class SrcT, class TarT>
+        void operator()(none const& e, Fsm& fsm, SrcT&, TarT&) {
+            auto msg = everest::lib::slac::fsm::evse::MatchingSessionData::create_cm_set_key_req(fsm.ctx->slac_config.session_nmk);
+            fsm.ctx->send_slac_message(fsm.ctx->slac_config.plc_peer_mac, msg);
+        }
+    };
+
 
     // Transitions
     using initial_state = Init;
     struct transition_table : boost::mpl::vector<
         //   Source         + Event             -> Target           / Action            [Guard]
         //  +---------------+--------------------+------------------+------------------+--------------------------+
-        Row < Init          , message            , MsgValid         , trigger_update   , msg_expected            >,
-        Row < Init          , update             , ResetChip        , none             , is_reset_chip_on        >,
-        Row < Init          , update             , Idle             , none             , Not_<is_reset_chip_on>  >
+        Row < Init          , none               , MsgSent          , send_set_key_req , none                    >,
+        Row < MsgSent       , message            , MsgValid         , trigger_update   , msg_expected            >,
+        Row < MsgValid      , update             , ResetChip        , none             , is_reset_chip_on        >,
+        Row < MsgValid      , update             , Idle             , none             , Not_<is_reset_chip_on>  >
         //  +---------------+--------------------+------------------+------------------+--------------------------+
         > {};
     template <class FSM,class Event>
@@ -811,9 +827,11 @@ struct WaitForLink_def : public state_machine_def<WaitForLink_def> {
 };
 struct Init_def        : public state_machine_def<Init_def> {
     // States
-    struct Init       : state<> {
+    struct Init       : timeout_state {
         template <class Event, class Fsm> void on_entry(Event const& e, Fsm& fsm) {
             LOG_STATE_ENTRY;
+            timeout_state::state_timeout_ms = fsm.ctx->slac_config.request_info_delay_ms;
+            timeout_state::on_entry(e, fsm);
         }
     };
     struct OpAttr     : timeout_state {
@@ -882,11 +900,11 @@ struct Init_def        : public state_machine_def<Init_def> {
     };
 
     // Transitions
-    using initial_state = boost::mpl::vector<OpAttr, Other>;
+    using initial_state = boost::mpl::vector<Init, Other>;
     struct transition_table : boost::mpl::vector<
         //     Source         + Event             -> Target           / Action            [Guard]
         //    +---------------+--------------------+------------------+------------------+--------------------------+-
-        Row   < Init          , none               , OpAttr           , op_attr_req      , none                     >,
+        Row   < Init          , update             , OpAttr           , op_attr_req      , timeout                  >,
         Row   < OpAttr        , update             , GetVersion       , get_version_req  , timeout                  >,
         Row   < GetVersion    , update             , Done             , none             , timeout                  >,
         //    +---------------+--------------------+------------------+------------------+--------------------------+-
