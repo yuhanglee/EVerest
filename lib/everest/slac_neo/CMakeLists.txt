@@ -1,6 +1,5 @@
 add_library(slac_neo)
 add_library(slac::neo ALIAS slac_neo)
-ev_register_library_target(slac_neo)
 
 find_package(Boost REQUIRED )
 
