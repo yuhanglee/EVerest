@@ -115,6 +115,8 @@ void slacImpl::run() {
 
     fsm_ctx.slac_config.reset_instead_of_fail = config.reset_instead_of_fail;
 
+    fsm_ctx.slac_config.print_state_transitions = config.print_state_transitions;
+ 
     fsm_ctx.slac_config.generate_nmk();
 
     memcpy(fsm_ctx.evse_mac, slac_io.get_mac_addr(), ETH_ALEN);

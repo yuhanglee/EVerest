@@ -39,6 +39,7 @@ struct Conf {
     bool reset_instead_of_fail;
     int startup_delay_ms;
     int slac_init_timeout_ms;
+    bool print_state_transitions;
 };
 
 class slacImpl : public slacImplBase {
@@ -46,6 +47,7 @@ public:
     slacImpl() = delete;
     slacImpl(Everest::ModuleAdapter* ev, const Everest::PtrContainer<EvseSlacNeo>& mod, Conf& config) :
         slacImplBase(ev, "main"), mod(mod), config(config){};
+
     // ev@8ea32d28-373f-4c90-ae5e-b4fcc74e2a61:v1
     // insert your public definitions here
     ~slacImpl() override;
