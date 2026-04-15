@@ -732,7 +732,7 @@ struct Matched_def     : public state_machine_def<Matched_def> {
     void on_entry(Event const&, Fsm& fsm) {
         ctx = fsm.ctx;
         ctx->signal_dlink_ready(true);
-        link_check_to_ms = ctx->slac_config.chip_reset.delay_ms;
+        link_check_to_ms = ctx->slac_config.link_status.poll_in_matched_state_ms;
         LOG_STATE_ENTRY;
     }
 
