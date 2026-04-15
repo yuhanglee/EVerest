@@ -215,7 +215,7 @@ struct Qualcomm      : public CheckLink {
 
     template <class Fsm>
     void link_status_req(Fsm& fsm) {
-        messages::lumissil::nscm_get_d_link_status_req link_status_req;
+        messages::qualcomm::link_status_req link_status_req;
         fsm.ctx->send_slac_message(fsm.ctx->slac_config.plc_peer_mac, link_status_req);
     }
     template <class Event, class Fsm> void on_entry(Event const& e, Fsm& fsm) {
@@ -306,7 +306,6 @@ struct Session_def     : public state_machine_def<Session_def> {
         return session_data.validate_message(e.payload.get_payload<MsgT>());
     }
     bool is_start_atten_char(message const& e) {
-        std::cout << "check atnn char" << std::endl;
         auto mmtype = defs::MMTYPE_CM_START_ATTEN_CHAR | defs::MMTYPE_MODE_IND;
         return check_message<slac::messages::cm_start_atten_char_ind>(e, mmtype, session_data);
     }
