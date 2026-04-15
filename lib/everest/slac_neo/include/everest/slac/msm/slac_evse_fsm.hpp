@@ -25,8 +25,9 @@
 #include <iostream>
 #include <sstream>
 
-#define LOG_STATE_ENTRY std::cout << "[FSM] ENTER State: " << boost::core::demangle(typeid(*this).name()) << std::endl;
-#define LOG_STATE_EXIT  std::cout << "[FSM] EXIT State: " << boost::core::demangle(typeid(*this).name()) << std::endl;
+
+#define LOG_STATE_ENTRY if(fsm.ctx->slac_config.print_state_transitions){std::cout << "[FSM] ENTER State: " << boost::core::demangle(typeid(*this).name()) << std::endl;}
+#define LOG_STATE_EXIT  if(fsm.ctx->slac_config.print_state_transitions){std::cout << "[FSM] EXIT State: " << boost::core::demangle(typeid(*this).name()) << std::endl;}
 
 namespace everest::lib::slac::msm {
 using namespace everest::lib::slac;

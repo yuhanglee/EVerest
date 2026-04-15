@@ -49,6 +49,8 @@ struct EvseSlacConfig {
     int sounding_atten_adjustment = 0;
 
     bool reset_instead_of_fail{false};
+
+    bool print_state_transitions{false};
 };
 
 } // namespace everest::lib::slac::fsm::evse
