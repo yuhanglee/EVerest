@@ -16,7 +16,6 @@ void FSMController::init() {
 }
 
 void FSMController::signal_new_slac_message(slac::messages::HomeplugMessage const& msg) {
-    ctx.log_info("Signal message");
     ctx.slac_message_payload = msg;
     fsm.message(msg);
 }
@@ -36,7 +35,6 @@ bool FSMController::signal_leave_bcd() {
 }
 
 void FSMController::handle_retrigger() {
-    //    ctx.log_info("Signal update");
     fsm.update();
 }
 
